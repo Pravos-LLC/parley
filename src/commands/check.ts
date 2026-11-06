@@ -53,6 +53,7 @@ import {
   isIssuesList,
   loginsForPerson,
   parseConfig,
+  partyOfAgent,
   partyOfLogin,
   partyOfPerson,
   partyPattern,
@@ -62,6 +63,7 @@ import { clauseHash, clauseTextById, coverage, frontMatterState, labelCovers, to
 import {
   authorKind,
   classify,
+  settle,
   parseTrailers,
   recordAddedByAgent,
   trailerProvenance,
@@ -70,6 +72,8 @@ import {
   type VerificationEntry,
 } from '../lib/provenance.js';
 import { commentProblem, GitHub, type GhComment } from '../lib/github.js';
+import { approves, approvesRecord, approvesRules, instructs, issueVerdict, parseApprovals, type ApprovalItem } from '../lib/approvals.js';
+import { sha256, shortHash } from '../lib/markdown.js';
 import { parseRecord } from '../lib/records.js';
 import { retrieve, verifyClause } from './verify.js';
 
@@ -194,9 +198,10 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
     const times = [git.run('log', '-1', '--format=%cI', headSha).trim(), ...(await gh.forcePushTimes(pr!))];
     pushedAt = times.sort((a, b) => Date.parse(b) - Date.parse(a))[0] ?? '';
   }
-  /** Valid comments on this PR from these logins, optionally after the latest push, whose body matches. */
-  const commentsFrom = (logins: string[], pattern: RegExp, afterPush: boolean) =>
-    comments.filter((c) => !commentProblem(c, { pr: pr!, logins, after: afterPush ? pushedAt : undefined }) && pattern.test(c.body));
+  /** Valid comments on this PR from these logins (on this PR, unedited, optionally after the latest push) whose body passes. */
+  const commentsFrom = (logins: string[], test: (body: string) => boolean, afterPush: boolean) =>
+    comments.filter((c) => !commentProblem(c, { pr: pr!, logins, after: afterPush ? pushedAt : undefined }) && test(c.body));
+  if (config.provenance.agentSources !== 'verify-or-approve') fail(`parley.config.yaml: provenance.agent_sources must be "verify-or-approve", not "${config.provenance.agentSources}".`);
   const shortHead = headSha.slice(0, 12);
 
   // ---- records/ are immutable once merged; new records need a participant's sign-off ----
@@ -211,20 +216,31 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
     for (const f of newRecords) {
       const text = git.show(headSha, f);
       const rec = parseRecord(f, text);
-      const speakers = new Set(rec.utterances.map((u) => u.speaker));
-      const partiesSpeaking = config.parties.filter((p) => [...speakers].some((s) => partyOfPerson([p], s)));
-      const media = /^[0-9a-f]{64}$/i.test(frontMatter(text).source_sha256 ?? '');
       const name = f.split('/').pop()!;
-      // A participant posts it with the media hash, or a speaker from another party signs off.
-      const byParticipant = media && authorParty && partiesSpeaking.some((p) => p.id === authorParty.id);
-      const signers = partiesSpeaking.filter((p) => p.id !== authorParty?.id);
-      const approved = canVerify && signers.some((p) => commentsFrom(p.logins, new RegExp(`^\\s*approve\\s+record\\s+${esc(name)}\\b`, 'im'), true).length > 0);
-      if (byParticipant || approved) continue;
-      if (!canVerify && !ci) {
-        say(`(local run: ${f} needs "approve record ${name}" from a speaker's party on the PR, or a participant posting it with source_sha256; CI checks.)`);
+      const sha12 = sha256(text).slice(0, 12);
+      const speakers = [...new Set(rec.utterances.map((u) => u.speaker))];
+      // Everyone who speaks outside the PR author's party must sign off on these exact words.
+      const outside = speakers.filter((sp) => !authorParty || partyOfPerson(config.parties, sp)?.id !== authorParty.id);
+      if (!outside.length) {
+        // Only the author's own party speaks: a participant may post it with the media hash.
+        const media = /^[0-9a-f]{64}$/i.test(frontMatter(text).source_sha256 ?? '');
+        if (authorParty && media) continue;
+        fail(`${f}: a record in which only ${authorParty?.name ?? 'the author'} speaks needs the transcript's source_sha256 in its front matter, and must come from a login of that party.`);
         continue;
       }
-      fail(`${f} is a new record. It needs a participant to open the PR with the transcript's source_sha256 in its front matter, or a comment on this PR from another party that spoke in it: "approve record ${name}".`);
+      const unknown = outside.filter((sp) => !partyOfPerson(config.parties, sp));
+      if (unknown.length) {
+        fail(`${f}: ${unknown.join(', ')} ${unknown.length > 1 ? 'are' : 'is'} not a person in parley.config.yaml, so nobody can sign off for them. Map speaker labels to people at ingest.`);
+        continue;
+      }
+      const parties = [...new Map(outside.map((sp) => [partyOfPerson(config.parties, sp)!.id, partyOfPerson(config.parties, sp)!])).values()];
+      if (!canVerify) {
+        if (ci) fail(`${f}: its sign-off cannot be verified in this run.`);
+        else say(`(local run: ${f} needs "approve record ${name} #${sha12}" from ${parties.map((p) => p.name).join(' and ')} on the PR; CI checks.)`);
+        continue;
+      }
+      const missing = parties.filter((p) => commentsFrom(p.logins, (b) => approvesRecord(b, name, sha12), true).length === 0);
+      if (missing.length) fail(`${f} puts words in the mouth of ${missing.map((p) => p.name).join(' and ')}. Each needs to comment on this PR, after the latest push: "approve record ${name} #${sha12}" (the first 12 characters of the file's SHA-256, which changes if the file does).`);
     }
   }
 
@@ -250,9 +266,8 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
       fail(`A PR that changes an agreement or an issues list must not also change the rules, the checks or the config. Split out: ${tooling.join(', ')}.`);
     }
     if (!bootstrap) {
-      const pattern = new RegExp(`^\\s*approve\\s+rules\\s+${shortHead}\\b`, 'im');
       if (canVerify) {
-        const missing = config.parties.filter((p) => commentsFrom(p.logins, pattern, true).length === 0);
+        const missing = config.parties.filter((p) => commentsFrom(p.logins, (b) => approvesRules(b, shortHead), true).length === 0);
         if (missing.length) fail(`This PR changes the rules, checks or config (${tooling.join(', ')}). Every party approves that: ${missing.map((p) => p.name).join(' and ')} still need to comment "approve rules ${shortHead}" on this PR.`);
       } else if (!ci) {
         say(`(local run: changes to ${tooling.join(', ')} need "approve rules ${shortHead}" from every party on the PR; CI checks.)`);
@@ -277,7 +292,7 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
 
   // ---- Linked comments (issues-list approvals, instructions) ----
   /** Who wrote a linked comment on this PR, or why it does not count. Null locally (cannot check). */
-  const linkedComment = async (url: string, logins: string[], needle: RegExp): Promise<string | null> => {
+  const linkedComment = async (url: string, logins: string[], test: (body: string) => boolean): Promise<string | null> => {
     const m = url.match(/github\.com\/([^/]+)\/([^/]+)\/(?:pull|issues)\/(\d+)#issuecomment-(\d+)/);
     if (!m) return 'the link is not a GitHub comment';
     if (!canVerify) return ci ? 'it cannot be verified in this run' : null;
@@ -286,23 +301,9 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
     if (!c) return 'the comment was not found';
     const problem = commentProblem(c, { pr: pr!, logins });
     if (problem) return problem;
-    if (!needle.test(c.body)) return 'the comment does not name it';
+    if (!test(c.body)) return 'the comment does not say it in the expected form';
     return '';
   };
-  /** Evidence that `party` agreed to something naming `needle`: an earlier records/ note, or their own comment on this PR. */
-  const evidenceFrom = async (text: string, party: Party, needle: RegExp): Promise<boolean> => {
-    const rec = text.match(new RegExp(`${esc(R)}/[\\w./-]+\\.md`));
-    if (rec && git.exists(baseTip, rec[0]) && git.exists(mergeBase, rec[0]) && needle.test(git.show(baseTip, rec[0]))) return true;
-    const url = text.match(/https:\/\/github\.com\/\S+#issuecomment-\d+/)?.[0];
-    if (!url) return false;
-    const problem = await linkedComment(url, party.logins, needle);
-    if (problem === null) {
-      say(`(local run: not verifying that ${url} was written by ${party.logins.join(' or ') || party.name}; CI does.)`);
-      return true;
-    }
-    return problem === '';
-  };
-
   // ---- Disclosure: every touched clause has a row in the change table ----
   const table: Table | null = audit ? null : parseTable(body, /^clause$/i);
   const multi = changed.length > 1;
@@ -349,12 +350,47 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
   const authorCol = table ? colIndex(table.header, 'author') : -1;
   const sourceCol = table ? colIndex(table.header, 'source') : -1;
 
+  // Approvals of agent-written changes. In a PR: comments on this PR by a login of a party other
+  // than the PR author's, posted after the latest push, never edited. In an audit of history:
+  // Parley-Approved trailers on commits by a person of a party other than the agent's.
+  const approvalSources: { items: ApprovalItem[]; by: string; party: Party | null }[] = [];
+  if (!audit && canVerify) {
+    for (const p of otherParties) for (const c of commentsFrom(p.logins, () => true, true)) approvalSources.push({ items: parseApprovals(c.body), by: c.user.login, party: p });
+  } else if (audit) {
+    for (const c of commits) {
+      const person = partyOfPerson(config.parties, c.author);
+      if (!person) continue;
+      const items = c.body
+        .split('\n')
+        .map((l) => l.match(/^Parley-Approved(-Contradicted)?:\s*(.+)$/i))
+        .filter(Boolean)
+        .flatMap((m) => parseApprovals(`${m![1] ? 'approve-contradicted' : 'approve'} ${m![2]}`));
+      if (items.length) approvalSources.push({ items, by: c.author, party: person });
+    }
+  }
+  const approverFor = (file: string, id: string, hash: string, contradicted: boolean, changeAuthor: string): string | null => {
+    const agentParty = partyOfAgent(config.parties, changeAuthor);
+    for (const src of approvalSources) {
+      if (audit && agentParty && src.party?.id === agentParty.id) continue; // an agent's own side cannot clear it in history
+      if (approves(src.items, file, id, hash, contradicted)) return src.by;
+    }
+    return null;
+  };
+  const approverNames = (changeAuthor: string) => {
+    if (audit) {
+      const ap = partyOfAgent(config.parties, changeAuthor);
+      return config.parties.filter((p) => p.id !== ap?.id).map((p) => p.name).join(' or ') || 'the other party';
+    }
+    return otherParties.map((p) => p.name).join(' or ') || 'the other party';
+  };
+  const needApproval: { file: string; id: string; hash: string; contradicted: boolean }[] = [];
+
   for (const file of changed) {
     const headText = git.show(headSha, file);
     if (frontMatterState(headText) === 'open') {
       fail(`${file}: the front matter opens with "---" on the first line but is never closed. Close it with a "---" line, or remove the opening line.`);
     }
-    const touched = touchedClauses(git, mergeBase, headSha, file);
+    const touched = touchedClauses(git, mergeBase, headSha, file, config.frontMatterStatus);
     say(`\n${file}: clauses touched: ${[...touched].sort(natural).join(', ') || 'none'}`);
 
     // Trailer provenance per clause, from the commits that touched it.
@@ -362,7 +398,7 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
     for (const c of commits) {
       if (!c.parent) continue;
       if (!git.changedFiles(c.parent, c.sha).includes(file)) continue;
-      for (const id of touchedClauses(git, c.parent, c.sha, file)) {
+      for (const id of touchedClauses(git, c.parent, c.sha, file, config.frontMatterStatus)) {
         const p = trailerProvenance(c.trailers, id);
         if (!p) continue;
         if (!trailerProv.has(id)) trailerProv.set(id, []);
@@ -417,79 +453,85 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
         }
       }
 
-      // Instruction comments are fetched before classification.
+      // Instruction comments ("instruct <clause>: ...") are fetched before classification.
       const instructionProblems = new Map<string, string | null>();
       for (const { prov } of provs) {
         const url = prov.source.match(/https:\/\/github\.com\/\S+#issuecomment-\d+/)?.[0];
         if (!/^instruction\b/i.test(prov.source) || !url) continue;
         const who = prov.source.replace(/^instruction\s*(by|from)?\s*:?\s*/i, '').split(/[,(]/)[0].trim();
         const logins = loginsForPerson(config.parties, who);
-        const problem = await linkedComment(url, logins, new RegExp(`(^|[^\\d.])${esc(id)}([^\\d]|$)`));
-        if (problem === null) {
-          say(`(local run: not verifying that ${url} is ${who}'s comment on this PR naming ${id}; CI does.)`);
-          instructionProblems.set(prov.source, null);
-        } else instructionProblems.set(prov.source, problem ? `the instruction comment does not count: ${problem}` : null);
+        const problem = await linkedComment(url, logins, (b) => instructs(b, id));
+        if (problem === null) instructionProblems.set(prov.source, `unverifiable: ${who}'s instruction comment can only be checked in CI`);
+        else instructionProblems.set(prov.source, problem ? `the instruction comment does not count: ${problem}` : null);
       }
 
-      let verification = verifications.filter((v) => v.file === file && v.clause === id && v.hash === hash).sort((a, b) => a.run_at.localeCompare(b.run_at)).pop() ?? null;
-      let worst: { c: Classification; prov: Provenance; commit?: string } | null = null;
-      const rank = { 'unknown-author': 4, synthetic: 3, 'approved-synthetic': 2, 'agent-sourced': 1, human: 0 } as const;
-      const classifyAll = () => {
-        worst = null;
-        for (const { prov, commit } of provs) {
-          // In a PR, evidence must be merged on the base branch. In an audit, it must predate the change.
-          const evidenceRef = audit && commit ? (commits.find((x) => x.sha === commit)?.parent ?? mergeBase) : baseTip;
-          const c = classify(
-            {
-              git,
-              config,
-              evidenceRef,
-              verification,
-              clause: { id, text: clauseText },
-              instructionCommentProblem: (s) => (instructionProblems.has(s) ? instructionProblems.get(s)! : 'the instruction comment was not verified'),
-              recordProblem: (f) => recordAddedByAgent(git, config, evidenceRef, f),
-            },
-            prov,
-          );
-          if (!worst || rank[c.status] > rank[worst.c.status]) worst = { c, prov, commit };
-        }
-      };
-      classifyAll();
-      // CI runs verify itself on agent-written changes that cite something.
-      if (runVerify && worst!.c.status === 'agent-sourced' && authorKind(config, worst!.prov.author) === 'agent') {
+      const rank = { 'unknown-author': 5, synthetic: 4, 'needs-person': 3, 'approved-synthetic': 2, 'agent-sourced': 1, human: 0 } as const;
+      const classified = provs.map(({ prov, commit }) => {
+        // In a PR, evidence must be merged on the base branch. In an audit, it must predate the change.
+        const evidenceRef = audit && commit ? (commits.find((x) => x.sha === commit)?.parent ?? mergeBase) : baseTip;
+        const c = classify(
+          {
+            git,
+            config,
+            evidenceRef,
+            clause: { id, text: clauseText },
+            instructionCommentProblem: (src) => (instructionProblems.has(src) ? instructionProblems.get(src)! : 'the instruction comment was not verified'),
+            recordProblem: (f) => recordAddedByAgent(git, config, evidenceRef, f),
+          },
+          prov,
+        );
+        return { c, prov, commit };
+      });
+      // Verify: in CI, computed now on this head (stored results can only add a contradiction).
+      // In an audit, the results saved in your checkout.
+      const stored = verifications.filter((v) => v.file === file && v.clause === id && v.hash === hash).sort((a, b) => a.run_at.localeCompare(b.run_at)).pop() ?? null;
+      let verification: VerificationEntry | null = audit ? stored : stored?.verdict === 'contradicted' ? stored : null;
+      const cited = classified.find((x) => x.c.status === 'needs-person');
+      if (runVerify && cited && !verification) {
         try {
-          const lines = [...worst!.c.cited, ...retrieve(clauseText, pool)].filter((u, i, arr) => arr.findIndex((x) => x.file === u.file && x.id === u.id) === i);
+          const lines = [...cited.c.cited, ...retrieve(clauseText, pool)].filter((u, i, arr) => arr.findIndex((x) => x.file === u.file && x.id === u.id) === i);
           const r = await verifyClause(config.verify.model, clauseText, lines, verifyKey!);
           verification = { file, clause: id, hash, model: config.verify.model, verdict: r.verdict, utterance_ids: r.utterance_ids, quote: r.quote, run_at: new Date().toISOString() };
-          classifyAll();
         } catch (e) {
-          say(`${file} ${id}: parley verify could not run (${(e as Error).message}); the structural checks still apply.`);
+          say(`${file} ${id}: parley verify could not run (${(e as Error).message}); the change needs the other party's approval.`);
         }
+      }
+      let worst: { c: Classification; prov: Provenance; commit?: string } | null = null;
+      for (const x of classified) {
+        // A PR is judged at its head. An audit judges each change at the commit that made it, the
+        // way that change's own PR was judged, so later edits do not void earlier approvals.
+        const at = audit && x.commit ? clauseHash(clauseTextById(git.show(x.commit, file), id)) : hash;
+        const v = at === hash ? verification : (verifications.filter((e) => e.file === file && e.clause === id && e.hash === at).pop() ?? null);
+        const approvedBy = approverFor(file, id, at, false, x.prov.author);
+        const approvedContradictedBy = approverFor(file, id, at, true, x.prov.author);
+        const c = settle(x.c, { verification: v, approvedBy, approvedContradictedBy });
+        if (!worst || rank[c.status] > rank[worst.c.status]) worst = { c, prov: x.prov, commit: x.commit };
       }
       const w = worst! as { c: Classification; prov: Provenance; commit?: string };
-      let status = w.c.status;
-      const reasons = [...w.c.reasons];
-      // A synthetic term passes only with the other party's approval comment carrying the current hash.
-      if (status === 'synthetic' && !audit) {
-        const pattern = new RegExp(`^\\s*approve[sd]?\\s+(?:synthetic\\s+)?(?:term\\s+)?${esc(id)}\\s+#${hash}\\b`, 'im');
-        const approver = canVerify ? otherParties.flatMap((p) => commentsFrom(p.logins, pattern, true))[0] : undefined;
-        if (approver) {
-          status = 'approved-synthetic';
-          reasons.push(`approved by ${approver.user.login} in a comment on this PR`);
-        }
-      }
+      const status = w.c.status;
+      const reasons = w.c.reasons;
       findings.push({ file, clause: id, author: w.prov.author, source: w.prov.source, status, reasons, commit: w.commit, hash });
+      const contradicted = verification?.verdict === 'contradicted';
       if (status === 'synthetic') {
-        const who = otherParties.map((p) => p.name).join(' or ') || 'the other party';
-        fail(`SYNTHETIC TERM  ${file} ${id}  by ${w.prov.author}\n  ${reasons.join('\n  ')}\n  Nobody on either side asked for this. Remove it, cite the utterance that supports it, or have ${who} comment on this PR, after the latest push: "approve ${id} #${hash}".`);
+        needApproval.push({ file, id, hash, contradicted });
+        fail(`SYNTHETIC TERM  ${file} ${id}  by ${w.prov.author}\n  ${reasons.join('\n  ')}\n  Nobody on either side asked for this. Remove it, cite what was said, or have ${approverNames(w.prov.author)} approve it (below).`);
+      } else if (status === 'needs-person') {
+        needApproval.push({ file, id, hash, contradicted: false });
+        fail(`NEEDS A PERSON  ${file} ${id}  by ${w.prov.author}\n  ${reasons.join('\n  ')}\n  ${runVerify ? 'parley verify did not clear it.' : 'parley verify did not run (no OPENROUTER_API_KEY), so a person has to.'} Have ${approverNames(w.prov.author)} approve it (below).`);
       } else if (status === 'unknown-author') {
         fail(`${file} ${id}: ${reasons.join('; ')}.`);
       } else {
-        detail.push(`${file} ${id}: ${status} (${w.prov.author}${w.c.cited.length ? `, ${w.c.cited.map((u) => `${u.file}#${u.id}`).join(', ')}` : ''})`);
-        const doubt = reasons.find((r) => r.startsWith('doubt:'));
-        if (doubt) say(`${file} ${id}: ${doubt}`);
+        detail.push(`${file} ${id}: ${status}${w.c.clearedBy ? ` (cleared by ${w.c.clearedBy})` : ''} (${w.prov.author}${w.c.cited.length ? `, ${w.c.cited.map((u) => `${u.file}#${u.id}`).join(', ')}` : ''})`);
       }
     }
+  }
+  if (needApproval.length) {
+    const plain = needApproval.filter((n) => !n.contradicted).map((n) => `${multi ? `${rel(n.file)} ` : ''}${n.id} #${n.hash}`);
+    const contra = needApproval.filter((n) => n.contradicted).map((n) => `${multi ? `${rel(n.file)} ` : ''}${n.id} #${n.hash}`);
+    const how = audit
+      ? 'In history, record the approval as a commit by a person of the other party with the trailer'
+      : 'To approve, a person of another party comments on this pull request, after the latest push, with a line of its own, nothing after it';
+    fail(`\n${how}:${plain.length ? `\n  ${audit ? 'Parley-Approved: ' : 'approve '}${plain.join(', ')}` : ''}${contra.length ? `\n  ${audit ? 'Parley-Approved-Contradicted: ' : 'approve-contradicted '}${contra.join(', ')}` : ''}`);
   }
   if (!audit && changed.length && !table) fail('\nNo change table found. The PR body needs a table whose first column header is "Clause".');
   if (!audit && changed.length && !discussedValue) fail('\nMissing "Discussed live:" line. Say when the parties discussed these changes, or "Not yet".');
@@ -500,6 +542,17 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
   const partyNames = config.parties.map((p) => p.name).join(', ');
 
   if (!adopted) {
+    // Before adoption, issues lists still follow the basic disclosure rule: every issue row this
+    // PR adds, removes or changes is named in the change table.
+    for (const ip of issuesChanged) {
+      const before = issuesRows(git.show(baseTip, ip)).rows;
+      const after = issuesRows(git.show(headSha, ip)).rows;
+      const touchedIds = [...new Set([...before.keys(), ...after.keys()])].filter((k) => (before.get(k) ?? []).join('|') !== (after.get(k) ?? []).join('|'));
+      const named = (table?.rows ?? []).map((r) => r[0] ?? '');
+      const missing = touchedIds.filter((k) => !named.some((n) => new RegExp(`\\b${esc(k)}\\b`).test(n)));
+      if (!table) fail(`${ip} changed, but the PR body has no change table. Add a row for each issue it changes (${touchedIds.join(', ') || 'none found'}).`);
+      else if (missing.length) fail(`Undisclosed changes in ${ip}. These issues changed but have no row in the change table:\n  ${missing.join('\n  ')}`);
+    }
     if (!errors.length) say('\nNEGOTIATION.md is not adopted on the base branch; only the disclosure and provenance checks apply.');
     return done();
   }
@@ -559,13 +612,14 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
 
   // Issues-list edits.
   const isAgreed = (v?: string) => /^agreed\b/i.test(stripMarkup(v ?? ''));
-  const approvalFrom = async (label: string, party: Party, iid: string): Promise<boolean> => {
-    const idRe = new RegExp(`\\b${esc(iid)}\\b`);
-    for (const v of lineValues(label)) {
-      if (!partyPattern(party).test(v) || !idRe.test(v)) continue;
-      if (await evidenceFrom(v, party, idRe)) return true;
-    }
-    return false;
+  /** Row hash: the first 12 characters of the SHA-256 of the row's cells at head. */
+  const rowHash = (cells: string[]) => shortHash(cells.map((c) => c.trim()).join('|'));
+  /** The first party (other than the author's) that has not commented "<verb> <id> #<row hash>". Null when all have. */
+  const missingVerdict = (verb: 'agree' | 'reopen', iid: string, cells: string[], others: Party[]): Party | null => {
+    const h = rowHash(cells);
+    if (!canVerify) return others[0] ?? null;
+    for (const o of others) if (!commentsFrom(o.logins, (b) => issueVerdict(b, verb, iid, h), true).length) return o;
+    return null;
   };
   for (const ip of issuesChanged) {
     const problems: string[] = [];
@@ -590,10 +644,6 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
     if ([...col.values()].some((i) => i < 0) || si < 0) {
       problems.push(`The issues table needs a "<party> position" column for each party (${config.parties.map((p) => `"${p.name} position"`).join(', ')}) and a "Status" column (see ${I}/TEMPLATE.md).`);
     } else {
-      const needAll = async (label: string, iid: string) => {
-        for (const o of others) if (!(await approvalFrom(label, o, iid))) return o;
-        return null;
-      };
       for (const [iid, old] of before.rows) {
         const now = after.rows.get(iid);
         if (!now) {
@@ -606,12 +656,12 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
         }
         const changedRow = old.join('|') !== now.join('|');
         if (isAgreed(old[si]) && changedRow) {
-          const missing = await needAll('Reopen approved by', iid);
-          if (missing) problems.push(`${iid} is agreed and this PR changes it. Add a "Reopen approved by:" line naming ${missing.name} and ${iid}, linking their comment on this PR or a ${R}/ note.`);
+          const missing = missingVerdict('reopen', iid, now, others);
+          if (missing) problems.push(`${iid} is agreed and this PR changes it. ${missing.name} must comment on this PR, after the latest push: "reopen ${iid} #${rowHash(now)}"${canVerify ? '' : ' (verified in CI)'}.`);
         }
         if (!isAgreed(old[si]) && isAgreed(now[si])) {
-          const missing = await needAll('Agreed by', iid);
-          if (missing) problems.push(`${iid} is being marked agreed. Add an "Agreed by:" line naming ${missing.name} and ${iid}, linking their comment on this PR or a ${R}/ note.`);
+          const missing = missingVerdict('agree', iid, now, others);
+          if (missing) problems.push(`${iid} is being marked agreed. ${missing.name} must comment on this PR, after the latest push: "agree ${iid} #${rowHash(now)}"${canVerify ? '' : ' (verified in CI)'}.`);
         }
       }
       for (const [iid, now] of after.rows) {
@@ -621,8 +671,8 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
           if (v && v !== '-') problems.push(`${iid}: a new issue may state only its author's position; leave the ${o.name} position for them.`);
         }
         if (isAgreed(now[si])) {
-          const missing = await needAll('Agreed by', iid);
-          if (missing) problems.push(`${iid} is new and already agreed. Add an "Agreed by:" line naming ${missing.name} and ${iid}, linking their comment on this PR or a ${R}/ note.`);
+          const missing = missingVerdict('agree', iid, now, others);
+          if (missing) problems.push(`${iid} is new and already agreed. ${missing.name} must comment on this PR, after the latest push: "agree ${iid} #${rowHash(now)}"${canVerify ? '' : ' (verified in CI)'}.`);
         }
       }
     }
@@ -661,7 +711,7 @@ export async function checkCommand(args: string[], audit = false): Promise<numbe
     if (args.includes('--verbose')) for (const l of result.detail) console.log(l);
     const counts = result.findings.reduce<Record<string, number>>((m, f) => ((m[f.status] = (m[f.status] ?? 0) + 1), m), {});
     if (result.findings.length) {
-      console.log(`\nProvenance: ${counts.human ?? 0} by people, ${counts['agent-sourced'] ?? 0} by agents citing what people said, ${counts['approved-synthetic'] ?? 0} approved by the other party, ${counts.synthetic ?? 0} synthetic${counts['unknown-author'] ? `, ${counts['unknown-author']} with no known author` : ''}.${args.includes('--verbose') ? '' : ' (--verbose lists every clause.)'}`);
+      console.log(`\nProvenance: ${counts.human ?? 0} by people, ${counts['agent-sourced'] ?? 0} by agents and cleared, ${counts['needs-person'] ?? 0} by agents and waiting for a person, ${counts['approved-synthetic'] ?? 0} synthetic but approved by the other party, ${counts.synthetic ?? 0} synthetic${counts['unknown-author'] ? `, ${counts['unknown-author']} with no known author` : ''}.${args.includes('--verbose') ? '' : ' (--verbose lists every clause.)'}`);
     }
     for (const e of result.errors) console.error(e);
     const synth = result.findings.filter((f) => f.status === 'synthetic');

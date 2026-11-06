@@ -6,6 +6,7 @@ import { createServer } from 'node:http';
 import { readFileSync } from 'node:fs';
 
 const [port, file] = process.argv.slice(2);
+// Any method: GET for the GitHub API, POST for the OpenRouter chat completion stand-in.
 createServer((req, res) => {
   let routes = {};
   try {

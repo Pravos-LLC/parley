@@ -20,6 +20,17 @@ These changes follow an independent review of the first draft. That draft never 
 - Ingest sanitizes speaker names and validates `--date`.
 - The leak gate reads its terms from the `PARLEY_LEAK_TERMS` secret.
 
+Second review round:
+- A citation alone never clears an agent-written change (`provenance.agent_sources: verify-or-approve`). It is cleared by a `supported` or `partial` verify verdict computed in CI on the head, by the other party's hash-bound approval, or by the quoted person's `instruct <clause>: ...` comment. `contradicted` fails unless approved with `approve-contradicted`. Uncleared citations show amber ("needs a person"). One comment can approve several clauses.
+- Instructions drop keyword matching.
+- Records quoting anyone outside the author's party need each such party's `approve record <file> #<sha12>`. A self-attested `source_sha256` counts only when the author's party alone speaks.
+- Issues-list agreement and reopening are `agree`/`reopen <ID> #<row hash>` comments. Records no longer count.
+- Approval forms must be the whole line.
+- Front-matter `version`, `date` and `status` values are validated strictly.
+- Issues lists follow the disclosure rule before adoption.
+- The workflow posts a `parley` commit status on the PR head from both events, so approvals turn the PR green.
+- The test suites block network calls.
+
 ### Added
 
 - `parley check`: pull request check for agreement repos. Every changed clause is disclosed in the change table, carries an Author and a Source, and agent-written terms with no source a person gave fail as synthetic terms. Ported and generalized from a two-party agreement harness: N parties from `parley.config.yaml`, the NEGOTIATION.md rules (interest, why, asked-for-by, issues list, rounds, own position columns, linked approvals), and the rules-versus-content split.

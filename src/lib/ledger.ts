@@ -2,10 +2,12 @@
 // what in the record of the meetings supports it. Built from git history and Parley-* trailers.
 
 import { Git } from './git.js';
-import { isAgreementFile, parseConfig, partyOfPerson, type ParleyConfig } from './config.js';
+import { isAgreementFile, parseConfig, partyOfAgent, partyOfPerson, type ParleyConfig } from './config.js';
+import { approves, parseApprovals } from './approvals.js';
 import { clauseTexts, touchedClauses, type ClauseText } from './clauses.js';
 import {
   classify,
+  settle,
   parseTrailers,
   recordAddedByAgent,
   trailerProvenance,
@@ -17,9 +19,9 @@ import {
 import { parseRecord, type MeetingRecord } from './records.js';
 import { frontMatter } from './markdown.js';
 
-export type Origin = 'person' | 'agent' | 'synthetic';
+export type Origin = 'person' | 'agent' | 'needs-person' | 'synthetic';
 
-export const originOf = (s: ChangeStatus): Origin => (s === 'human' ? 'person' : s === 'agent-sourced' || s === 'approved-synthetic' ? 'agent' : 'synthetic');
+export const originOf = (s: ChangeStatus): Origin => (s === 'human' ? 'person' : s === 'agent-sourced' || s === 'approved-synthetic' ? 'agent' : s === 'needs-person' ? 'needs-person' : 'synthetic');
 
 export interface ClauseEvent {
   version: number;
@@ -107,6 +109,21 @@ export function buildLedger(cwd: string, head = 'HEAD'): Ledger {
     verifications = [];
   }
 
+  // Approvals recorded in history: Parley-Approved trailers on commits by a person in the config.
+  const approvals = git
+    .commits(null, headSha)
+    .map((sha) => git.commitMeta(sha))
+    .flatMap((m) => {
+      const party = partyOfPerson(config.parties, m.author);
+      if (!party) return [];
+      const items = m.body
+        .split('\n')
+        .map((l) => l.match(/^Parley-Approved(-Contradicted)?:\s*(.+)$/i))
+        .filter(Boolean)
+        .flatMap((x) => parseApprovals(`${x![1] ? 'approve-contradicted' : 'approve'} ${x![2]}`));
+      return items.length ? [{ items, by: m.author, party }] : [];
+    });
+
   const agreements: LedgerAgreement[] = files.map((file) => {
     const shas = git.commits(null, headSha, [file]);
     const state = new Map<string, LedgerClause>();
@@ -132,7 +149,12 @@ export function buildLedger(cwd: string, head = 'HEAD'): Ledger {
         if (!prov && partyOfPerson(config.parties, meta.author)) prov = { author: meta.author, source: '', via: 'trailer' };
         const hash = now?.hash ?? '';
         const verification = verifications.filter((v) => v.file === file && v.clause === id && v.hash === hash).pop() ?? null;
-        const c = classify({ git, config, evidenceRef, verification, clause: now ? { id, text: now.text } : undefined, recordProblem: (f) => recordAddedByAgent(git, config, evidenceRef, f) }, prov);
+        const raw = classify({ git, config, evidenceRef, clause: now ? { id, text: now.text } : undefined, recordProblem: (f) => recordAddedByAgent(git, config, evidenceRef, f) }, prov);
+        const approver = (contradicted: boolean) => {
+          const agentParty = prov ? partyOfAgent(config.parties, prov.author) : null;
+          return approvals.find((a) => (!agentParty || a.party.id !== agentParty.id) && approves(a.items, file, id, hash, contradicted))?.by ?? null;
+        };
+        const c = settle(raw, { verification, approvedBy: approver(false), approvedContradictedBy: approver(true) });
         const event: ClauseEvent = {
           version: n,
           sha,
@@ -171,7 +193,7 @@ export function buildLedger(cwd: string, head = 'HEAD'): Ledger {
         if (s && !touched.has(c.id)) state.set(c.id, { ...s, ...c });
       }
       const ordered = clauses.map((c) => state.get(c.id)).filter(Boolean) as LedgerClause[];
-      const byOrigin: Record<Origin, number> = { person: 0, agent: 0, synthetic: 0 };
+      const byOrigin: Record<Origin, number> = { person: 0, agent: 0, 'needs-person': 0, synthetic: 0 };
       for (const c of ordered) byOrigin[c.origin] += c.words;
       const by = trailers.author ?? trailers.changes[0]?.author ?? meta.author;
       versions.push({

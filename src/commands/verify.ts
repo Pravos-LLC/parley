@@ -94,7 +94,7 @@ export async function verifyClause(model: string, clause: string, lines: (Uttera
   const started = Date.now();
   let format: Record<string, unknown> = { type: 'json_schema', json_schema: SCHEMA };
   const call = (reasoning: Record<string, unknown> | null) =>
-    fetch('https://openrouter.ai/api/v1/chat/completions', {
+    fetch(`${(process.env.PARLEY_OPENROUTER_API ?? 'https://openrouter.ai/api/v1').replace(/\/$/, '')}/chat/completions`, {
       method: 'POST',
       headers: { Authorization: `Bearer ${apiKey}`, 'Content-Type': 'application/json', 'X-Title': 'parley verify', 'HTTP-Referer': 'https://github.com/Pravos-LLC/parley' },
       body: JSON.stringify({

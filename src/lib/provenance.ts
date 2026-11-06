@@ -56,7 +56,14 @@ export function trailerProvenance(t: CommitTrailers, clause: string): Provenance
   return null;
 }
 
-export type ChangeStatus = 'human' | 'agent-sourced' | 'synthetic' | 'approved-synthetic' | 'unknown-author';
+/**
+ * human: a person wrote it. agent-sourced: an agent wrote it and something cleared it (a verify
+ * verdict, the other party's approval, or the person's own instruction comment). needs-person:
+ * an agent wrote it citing what was said, but nothing has cleared it yet. synthetic: no source,
+ * a bad source, or contradicted by the record. approved-synthetic: synthetic, approved by the
+ * other party.
+ */
+export type ChangeStatus = 'human' | 'agent-sourced' | 'needs-person' | 'synthetic' | 'approved-synthetic' | 'unknown-author';
 
 export interface CitedUtterance extends Utterance {
   file: string;
@@ -67,6 +74,7 @@ export interface Classification {
   kind: AuthorKind;
   reasons: string[];
   cited: CitedUtterance[];
+  clearedBy?: 'verify' | 'approval' | 'instruction';
 }
 
 export type Verdict = 'supported' | 'partial' | 'contradicted' | 'unsupported';
@@ -85,20 +93,12 @@ export interface VerificationEntry {
   run_at: string;
 }
 
-export interface SyntheticApproval {
-  clause: string;
-  hash: string;
-  person: string;
-  evidence: string;
-}
-
 export interface ClassifyContext {
   git: Git;
   config: ParleyConfig;
   /** Records must already exist at this ref to count as evidence (the base branch tip in a PR, or the change's parent in an audit). */
   evidenceRef: string;
-  verification?: VerificationEntry | null;
-  /** The clause id and its text at head, for instruction checks. */
+  /** The clause id and its text at head. */
   clause?: { id: string; text: string };
   /**
    * For an instruction that links a PR comment: null when verified, otherwise the reason.
@@ -146,52 +146,85 @@ export function classify(ctx: ClassifyContext, prov: Provenance | null): Classif
   }
   if (kind === 'human') return { status: 'human', kind, reasons, cited: resolved };
 
-  // Agent-authored: needs a source a person gave.
-  let sourced = false;
+  // Agent-authored. A cited utterance only says where the change comes from; it does not clear
+  // it (status needs-person until verify or the other party clears it, see settle()). Only the
+  // person's own instruction comment on the PR clears it outright.
+  let status: ChangeStatus = 'synthetic';
+  let clearedBy: Classification['clearedBy'];
   if (!prov.source.trim()) {
     reasons.push('agent-authored change with no Source');
   } else if (instruction) {
-    // "instruction by <Name>, <evidence>": the evidence must be that person's own words.
     const who = prov.source.replace(/^instruction\s*(by|from)?\s*:?\s*/i, '').split(/[,(]/)[0].trim();
     const person = partyOfPerson(ctx.config.parties, who);
     const url = prov.source.match(/https:\/\/github\.com\/\S+#issuecomment-\d+/)?.[0];
     if (!person) {
       reasons.push(`instruction source does not name a person in parley.config.yaml ("${who}")`);
-    } else if (resolved.length) {
-      // A records/ utterance spoken by that person, naming the clause or its key words.
-      const bySpeaker = resolved.filter((u) => sameName(u.speaker, who, ctx.config));
-      const onPoint = bySpeaker.filter((u) => mentionsClause(u.text, ctx.clause));
-      if (!bySpeaker.length) reasons.push(`the cited utterance was not spoken by ${who}`);
-      else if (!onPoint.length) reasons.push(`what ${who} said in the cited utterance does not name clause ${ctx.clause?.id ?? ''} or its key words`);
-      else {
-        sourced = true;
-        cited.push(...onPoint);
-      }
     } else if (url) {
-      const problem = ctx.instructionCommentProblem ? ctx.instructionCommentProblem(prov.source) : 'the instruction comment was not verified';
-      if (problem) reasons.push(problem);
-      else sourced = true;
-    } else {
-      reasons.push(`instruction source has no evidence: cite an utterance by ${who} (records/<file>.md#u012) or link ${who}'s comment on this pull request`);
+      const problem = ctx.instructionCommentProblem ? ctx.instructionCommentProblem(prov.source) : 'unverifiable: the instruction comment can only be checked in CI';
+      if (problem?.startsWith('unverifiable')) {
+        // Outside CI the comment cannot be fetched: a person still has to look.
+        reasons.push(problem.replace(/^unverifiable:\s*/, ''));
+        status = 'needs-person';
+      } else if (problem) reasons.push(problem);
+      else {
+        status = 'agent-sourced';
+        clearedBy = 'instruction';
+      }
+    } else if (resolved.length) {
+      const bySpeaker = resolved.filter((u) => sameName(u.speaker, who, ctx.config));
+      if (!bySpeaker.length) reasons.push(`the cited utterance was not spoken by ${who}`);
+      else {
+        status = 'needs-person';
+        cited.push(...bySpeaker);
+      }
+    } else if (!recordRefs(prov.source).length) {
+      reasons.push(`instruction source has no evidence: link ${who}'s "instruct <clause>: ..." comment on this pull request, or cite an utterance by ${who} (records/<file>.md#u012)`);
     }
   } else if (recordRefs(prov.source).length === 0) {
-    reasons.push(`Source "${prov.source}" is not a records/ utterance or a linked instruction from a person`);
+    reasons.push(`Source "${prov.source}" is not a records/ utterance or an instruction from a person`);
   } else if (resolved.length) {
-    sourced = true;
+    status = 'needs-person';
     cited.push(...resolved);
   }
+  return { status, kind, reasons, cited, clearedBy };
+}
 
-  // A contradicted verdict fails the change. "unsupported" on a sourced change is a doubt for a
-  // person to read, not a failure: in the model trial it mostly marks boilerplate (docs/models.md).
-  const v = ctx.verification;
-  if (sourced && v && v.verdict === 'contradicted') {
-    sourced = false;
-    reasons.push(`parley verify (${v.model}) found it contradicted by the transcript${v.quote ? `: "${v.quote}"` : ''}`);
-  } else if (sourced && v && v.verdict === 'unsupported') {
-    reasons.push(`doubt: parley verify (${v.model}) found no support for it in the transcript; a person should read it`);
+export interface Clearance {
+  verification?: VerificationEntry | null;
+  /** Who approved this clause at its current hash ("approve <clause> #<hash>"), if anyone. */
+  approvedBy?: string | null;
+  /** Who approved it despite a contradicted verdict ("approve-contradicted <clause> #<hash>"). */
+  approvedContradictedBy?: string | null;
+}
+
+/**
+ * Decide whether an agent-written change is cleared. A citation is cleared by a verify verdict
+ * of supported or partial, or by the other party's hash-bound approval. A contradicted verdict
+ * makes it synthetic, cleared only by "approve-contradicted". A synthetic term is cleared only by
+ * an approval.
+ */
+export function settle(c: Classification, cl: Clearance): Classification {
+  const reasons = [...c.reasons];
+  const v = cl.verification;
+  if (c.status === 'needs-person') {
+    if (v && v.verdict === 'contradicted') {
+      reasons.push(`parley verify (${v.model}) found it contradicted by the transcript${v.quote ? `: "${v.quote}"` : ''}`);
+      if (cl.approvedContradictedBy) return { ...c, status: 'approved-synthetic', reasons: [...reasons, `approved despite the contradiction by ${cl.approvedContradictedBy}`] };
+      return { ...c, status: 'synthetic', reasons };
+    }
+    if (v && (v.verdict === 'supported' || v.verdict === 'partial')) return { ...c, status: 'agent-sourced', clearedBy: 'verify', reasons: [...reasons, `parley verify (${v.model}): ${v.verdict}`] };
+    if (cl.approvedBy || cl.approvedContradictedBy) {
+      if (v && v.verdict === 'unsupported') reasons.push(`parley verify (${v.model}) found no support for it in the transcript`);
+      return { ...c, status: 'agent-sourced', clearedBy: 'approval', reasons: [...reasons, `approved by ${cl.approvedBy ?? cl.approvedContradictedBy}`] };
+    }
+    if (v && v.verdict === 'unsupported') reasons.push(`parley verify (${v.model}) found no support for it in the transcript`);
+    else if (!v) reasons.push('cites what was said, but nothing has checked that it says this: needs parley verify or the other party\'s approval');
+    return { ...c, reasons };
   }
-  if (sourced) return { status: 'agent-sourced', kind, reasons, cited };
-  return { status: 'synthetic', kind, reasons, cited };
+  if (c.status === 'synthetic' && (cl.approvedBy || cl.approvedContradictedBy)) {
+    return { ...c, status: 'approved-synthetic', reasons: [...reasons, `approved by ${cl.approvedBy ?? cl.approvedContradictedBy}`] };
+  }
+  return c;
 }
 
 /** A record added by an agent-authored commit is not evidence: agents do not write the record of what people said. */
@@ -206,20 +239,6 @@ export function recordAddedByAgent(git: Git, config: ParleyConfig, ref: string, 
   const t = parseTrailers(git.commitMeta(sha).body);
   if (t.author && authorKind(config, t.author) === 'agent') return `${file} was added by ${t.author}; agents do not write records, so it is not evidence`;
   return null;
-}
-
-const STOP = new Set('the and for with that this shall will may must not any each all such other than then from into upon under over their there these those about after before being which while where when what have has had are was were been also only more most some very just like your yours ours them they'.split(' '));
-const words = (t: string) => new Set((t.toLowerCase().match(/[a-z][a-z'-]{4,}/g) ?? []).filter((w) => !STOP.has(w)));
-
-/** Does an utterance name the clause id, or share at least two key words (five letters or more) with it? */
-export function mentionsClause(text: string, clause?: { id: string; text: string }): boolean {
-  if (!clause) return false;
-  const esc = clause.id.replace(/\./g, '\\.');
-  if (/^\d/.test(clause.id) && new RegExp(`(^|[^\\d.])${esc}([^\\d]|$)`).test(text)) return true;
-  const a = words(clause.text.replace(/\*\*[\d.]+\*\*/g, ''));
-  let shared = 0;
-  for (const w of words(text)) if (a.has(w)) shared++;
-  return shared >= 2;
 }
 
 function sameName(speaker: string, who: string, config: ParleyConfig): boolean {

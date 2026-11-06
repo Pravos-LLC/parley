@@ -22,13 +22,13 @@ Every changed clause gets a row. `parley check` fails any clause touched in the 
 | | | | | | | | | | |
 
 - **Author:** the person who wrote the change, or `agent:<id>` if an agent did.
-- **Source:** where the change comes from: `records/<file>.md#u012` (an utterance in a merged meeting record), or an instruction: `instruction by <Name>, records/<file>.md#u012` (an utterance that person spoke, naming the clause or its key words) or `instruction by <Name>, <link to their comment on this PR naming the clause>`.
+- **Source:** where the change comes from: `records/<file>.md#u012` (an utterance in a merged meeting record), `instruction by <Name>, records/<file>.md#u012` (an utterance that person spoke), or `instruction by <Name>, <link to their comment on this PR with a line "instruct <clause>: ...">`. A cited utterance still needs `parley verify` to agree in CI, or the other party's approval; an `instruct` comment clears the change.
 - **Asked for by:** a person or party, never an agent.
 - **Issue:** an ID on `agreements/issues/<agreement>.md` once NEGOTIATION.md is adopted, or `n/a` for renumbering and version metadata.
 
 If the PR changes more than one agreement, start each Clause with the file's path under `agreements/` (for example `services-agreement.md 2.2` or `term-sheets/services.md 3`). A change inside front matter (other than `version`, `date` or `status`) needs a `front matter` row.
 
-An agent-written term nobody discussed (a synthetic term) can still merge if someone from the other party comments on this PR, after the latest push: `approve <clause> #<hash>`, using the hash `parley check` prints.
+Agent-written changes are cleared by `parley verify` (in CI), or by someone from the other party commenting on this PR, after the latest push, on a line of its own: `approve <clause> #<hash>, <clause> #<hash>`, using the hashes `parley check` prints. A clause verify found contradicted needs `approve-contradicted <clause> #<hash>`. The required check is the `parley` status.
 
 ### New terms
 

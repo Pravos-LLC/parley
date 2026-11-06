@@ -46,7 +46,7 @@ Each agreement under negotiation has `agreements/issues/<agreement>.md`.
 Each row is one issue: an ID, the clause, who raised it, the interest, each party's position, a status (`open`, `agreed`, `parked` or `for-call`) and the record that settled it.
 Each party edits only its own position column, from its own GitHub account.
 Issues are never deleted.
-An issue becomes `agreed`, or an agreed issue changes, only with every other party's linked approval.
+An issue becomes `agreed` only when every other party comments on the PR `agree <ID> #<row hash>`, and an agreed issue changes only with `reopen <ID> #<row hash>`.
 
 ### 5. One written round each, then a call
 

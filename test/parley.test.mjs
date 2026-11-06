@@ -8,6 +8,12 @@ import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
+// Hermetic: no model key, and every child process refuses network calls (logged to NET_LOG).
+const NET_LOG = join(mkdtempSync(join(tmpdir(), 'parley-net-')), 'network.log');
+delete process.env.OPENROUTER_API_KEY;
+delete process.env.PARLEY_OPENROUTER_API;
+process.env.PARLEY_NET_LOG = NET_LOG;
+process.env.NODE_OPTIONS = `--import ${join(ROOT, 'test/no-network.mjs')}`;
 const CLI = join(ROOT, 'dist', 'cli.mjs');
 const parley = (args, opts = {}) => spawnSync(process.execPath, [CLI, ...args], { encoding: 'utf8', ...opts });
 
@@ -39,7 +45,9 @@ test('audit on the two-founders demo flags exactly the planted synthetic terms',
   const byClause = Object.fromEntries(out.findings.map((f) => [f.clause, f.status]));
   for (const c of ['1.1', '1.3', '2.2', '3.3', '4.1', '4.2', '5.1', '7.2']) assert.equal(byClause[c], 'agent-sourced', c);
   for (const c of ['2.1', '3.2', '6.2']) assert.equal(byClause[c], 'human', c);
-  assert.equal(out.errors.length, 4);
+  assert.equal(out.errors.filter((e) => e.startsWith('SYNTHETIC TERM')).length, 4);
+  // Every change that cites the call was approved by the other side in history: no amber.
+  assert.equal(out.findings.filter((f) => f.status === 'needs-person').length, 0);
 });
 
 test('audit of the human draft alone passes', () => {
@@ -53,8 +61,12 @@ test('each round is judged on its own: round 4 is clean, round 2 is not', () => 
   const repo = buildFixture();
   const sha = (grep) => execFileSync('git', ['-C', repo, 'log', '--format=%H', '--grep', grep], { encoding: 'utf8' }).trim();
   const r4 = sha('round 4,');
+  const r4review = sha('review: round 3 ');
   const r2 = sha('round 2,');
-  assert.equal(parley(['audit', '--repo', repo, '--base', `${r4}~1`, '--head', r4]).status, 0);
+  // Round 4 with the other side's review commit is clean; the round alone still needs a person.
+  assert.equal(parley(['audit', '--repo', repo, '--base', `${r4}~1`, '--head', r4review]).status, 0);
+  const alone = JSON.parse(parley(['audit', '--repo', repo, '--base', `${r4}~1`, '--head', r4, '--json']).stdout);
+  assert.ok(alone.findings.length > 0 && alone.findings.every((f) => f.status === 'needs-person'));
   const bad = parley(['audit', '--repo', repo, '--base', `${r2}~1`, '--head', r2, '--json']);
   assert.equal(bad.status, 1);
   assert.deepEqual(JSON.parse(bad.stdout).findings.filter((f) => f.status === 'synthetic').map((f) => f.clause), ['4.3']);
@@ -171,8 +183,9 @@ test('the demo with its saved verify run flags the meaning-level trap too, and d
   const synthetic = out.findings.filter((f) => f.status === 'synthetic').map((f) => f.clause).sort();
   // 7.2 doubles the liability cap the call agreed; 11.3 is the trial's one boilerplate contradiction.
   assert.deepEqual(synthetic, ['11.3', '3.1', '4.3', '6.1', '6.3', '7.2'].sort());
-  const doubts = out.findings.filter((f) => f.status === 'agent-sourced' && f.reasons.some((x) => x.startsWith('doubt:')));
-  assert.ok(doubts.length > 0, 'unsupported verdicts are recorded as doubts');
+  const doubts = out.findings.filter((f) => f.status === 'agent-sourced' && f.reasons.some((x) => /no support/.test(x)) && f.reasons.some((x) => /approved by/.test(x)));
+  assert.ok(doubts.length > 0, 'unsupported verdicts are cleared only by the approval, and say so');
+  assert.equal(out.findings.filter((f) => f.status === 'needs-person').length, 0);
   rmSync(dir, { recursive: true, force: true });
 });
 
@@ -282,7 +295,7 @@ test('L1: verify describes what parley check actually does with its results', ()
 test('L2: CI pins actions by SHA, keeps no token on disk, and verifies the gitleaks checksum', () => {
   for (const f of ['.github/workflows/ci.yml', 'templates/github/workflows/parley.yml']) {
     const wf = readFileSync(join(ROOT, f), 'utf8');
-    for (const m of wf.matchAll(/uses:\s*(\S+)/g)) assert.match(m[1], /@[0-9a-f]{40}$/, `${f}: ${m[1]}`);
+    for (const m of wf.matchAll(/^\s*-?\s*uses:\s*(\S+)/gm)) assert.match(m[1], /@[0-9a-f]{40}$/, `${f}: ${m[1]}`);
     assert.match(wf, /persist-credentials: false/, f);
   }
   assert.match(readFileSync(join(ROOT, '.github/workflows/ci.yml'), 'utf8'), /sha256sum -c/);
@@ -308,4 +321,45 @@ test('demo: the meeting title fits a narrow record picker', () => {
   const title = rec.match(/^# (.+)$/m)[1];
   assert.equal(title, 'Kickoff call, 2026-10-14');
   assert.ok(title.length <= 26);
+});
+
+test('R-H1: the ledger shows amber for cited-but-unchecked agent changes, and the default demo has none', async () => {
+  const repo = buildFixture();
+  const port = 5400 + Math.floor(Math.random() * 400);
+  const { spawn } = await import('node:child_process');
+  const child = spawn(process.execPath, [CLI, 'ui', '--repo', repo, '--port', String(port)], { stdio: 'pipe' });
+  try {
+    let ledger;
+    for (let i = 0; i < 40 && !ledger; i++) {
+      await new Promise((r) => setTimeout(r, 150));
+      try {
+        ledger = await (await fetch(`http://127.0.0.1:${port}/api/ledger`)).json();
+      } catch {}
+    }
+    const last = ledger.agreements[0].versions.at(-1);
+    const origins = last.snapshot.reduce((m, c) => ((m[c.origin] = (m[c.origin] ?? 0) + 1), m), {});
+    assert.equal(origins['needs-person'] ?? 0, 0);
+    assert.deepEqual(last.snapshot.filter((c) => c.origin === 'synthetic').map((c) => c.id).sort(), ['3.1', '4.3', '6.1', '6.3']);
+  } finally {
+    child.kill('SIGINT');
+  }
+  // Without the other side's review commits, the same history is amber, not red.
+  const dir = mkdtempSync(join(tmpdir(), 'parley-amber-'));
+  execFileSync('git', ['clone', '-q', repo, join(dir, 'r')]);
+  const r = join(dir, 'r');
+  const reviews = execFileSync('git', ['-C', r, 'log', '--format=%H', '--grep', '^review:'], { encoding: 'utf8' }).trim().split('\n');
+  assert.ok(reviews.length >= 4);
+  const first = execFileSync('git', ['-C', r, 'log', '--format=%H', '--grep', 'round 7,'], { encoding: 'utf8' }).trim();
+  const out = JSON.parse(parley(['audit', '--repo', r, '--head', first, '--base', `${first}~1`, '--json']).stdout);
+  assert.ok(out.findings.some((f) => f.status === 'needs-person'));
+  rmSync(dir, { recursive: true, force: true });
+});
+
+test('R-L3: no test made a network call, and the guard really blocks one', () => {
+  // Runs last: everything before it inherited the guard.
+  assert.ok(!existsSync(NET_LOG) || readFileSync(NET_LOG, 'utf8').trim() === '', `network calls: ${existsSync(NET_LOG) ? readFileSync(NET_LOG, 'utf8') : ''}`);
+  const repo = buildFixture();
+  const r = parley(['verify', '--repo', repo], { env: { ...process.env, OPENROUTER_API_KEY: 'test-key' } });
+  assert.equal(r.status, 0);
+  assert.match(readFileSync(NET_LOG, 'utf8'), /openrouter\.ai/);
 });

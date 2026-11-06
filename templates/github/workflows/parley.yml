@@ -4,8 +4,12 @@ name: parley
 # comments (approvals are comments). Under pull_request_target and issue_comment, GitHub runs
 # this workflow file from the base branch, so a pull request cannot edit the check that judges
 # it. The checker itself is read from the PR's base branch tip, and the PR head is fetched only
-# as git data, never checked out or executed. Permissions are read-only, and the token is not
-# left on disk.
+# as git data, never checked out or executed. The token can read the repo and write commit
+# statuses, nothing else, and it is not left on disk.
+#
+# Both events post the result as a commit status named "parley" on the PR's head commit, so an
+# approval comment turns the PR green. Make "parley" the required status check in branch
+# protection (not the job name).
 on:
   pull_request_target:
     types: [opened, edited, synchronize, reopened]
@@ -16,6 +20,7 @@ permissions:
   contents: read
   issues: read
   pull-requests: read
+  statuses: write
 
 jobs:
   disclose-every-change:
@@ -38,22 +43,51 @@ jobs:
           case "$base" in *[!A-Za-z0-9._/-]*|"") echo "::error::unexpected base ref"; exit 1 ;; esac
           echo "BASE_REF=$base" >> "$GITHUB_ENV"
           echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+          echo "HEAD_SHA=$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .head.sha)" >> "$GITHUB_ENV"
           auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git -c "http.https://github.com/.extraheader=$auth" fetch --no-tags origin \
             "+refs/heads/$base:refs/remotes/origin/$base" "+refs/pull/$PR_NUMBER/head:refs/parley/head"
       - name: Every change disclosed, every agent change traced to what people said
+        id: check
         env:
           GITHUB_TOKEN: ${{ github.token }}
-          # Optional: lets CI run parley verify on agent-written changes.
+          # Optional: lets CI run parley verify on agent-written changes. Without it, every
+          # agent-written change needs the other party's approval comment.
           OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
         run: |
           if ! git cat-file -e "origin/$BASE_REF:.parley/parley.mjs" 2>/dev/null; then
             if git cat-file -e "origin/$BASE_REF:parley.config.yaml" 2>/dev/null; then
               echo "::error::parley.config.yaml is on $BASE_REF but .parley/parley.mjs is not. The checker was removed; restore it."
-              exit 1
+              echo "result=failure" >> "$GITHUB_OUTPUT"
+              exit 0
             fi
             echo "The base branch has no parley setup yet (this is the setup PR). Nothing to check."
+            echo "result=success" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [ "$(git rev-parse refs/parley/head)" != "$HEAD_SHA" ]; then
+            echo "::error::the fetched head is not the PR's head commit"
+            echo "result=failure" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           git show "origin/$BASE_REF:.parley/parley.mjs" > "$RUNNER_TEMP/parley.mjs"
+          set +e
           node "$RUNNER_TEMP/parley.mjs" check --pr "$PR_NUMBER" --base "origin/$BASE_REF" --head refs/parley/head
+          code=$?
+          set -e
+          if [ "$code" = 0 ]; then echo "result=success" >> "$GITHUB_OUTPUT"; else echo "result=failure" >> "$GITHUB_OUTPUT"; fi
+      - name: Post the "parley" status on the PR head
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RESULT: ${{ steps.check.outputs.result || 'error' }}
+        run: |
+          case "$RESULT" in
+            success) desc="Every change is disclosed and traced to what people said." ;;
+            failure) desc="Undisclosed, unapproved or synthetic changes. See the run log." ;;
+            *) RESULT=error; desc="The check could not run. See the run log." ;;
+          esac
+          gh api "repos/$GITHUB_REPOSITORY/statuses/$HEAD_SHA" -f state="$RESULT" -f context=parley \
+            -f description="$desc" -f target_url="$GITHUB_SERVER_URL/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID"
+          # The PR's own run also fails its job, so the result shows in the Checks tab.
+          if [ "$GITHUB_EVENT_NAME" = pull_request_target ] && [ "$RESULT" != success ]; then exit 1; fi

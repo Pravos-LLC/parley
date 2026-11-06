@@ -6,14 +6,15 @@
 
 | Verdict | What `parley check` does |
 |---|---|
-| `supported`, `partial` | nothing |
-| `contradicted` | the clause becomes a synthetic term and fails, even though it cites a source |
-| `unsupported` | logged as a doubt and marked "Read this" in the UI, not a failure |
+| `supported`, `partial` | clears an agent-written change that cites the call |
+| `contradicted` | the clause becomes a synthetic term and fails, even with the other party's approval, unless they comment `approve-contradicted <clause> #<hash>` |
+| `unsupported` | not cleared: the change needs the other party's approval (amber, "needs a person") |
+| no verdict (no `OPENROUTER_API_KEY`) | not cleared: every agent-written change needs the other party's approval |
 
-Only `contradicted` fails. In the trial below, every capable model said `contradicted` for every planted term. `unsupported` mostly landed on boilerplate, where reasonable people disagree. A missing or invented source fails with or without a model.
+A citation alone never clears an agent-written change. In the trial below, every capable model said `contradicted` for every planted term. `unsupported` mostly landed on boilerplate, where reasonable people disagree. A missing or invented source fails with or without a model.
 
 Where results come from:
-- **CI** (`parley check`): when the repository has an `OPENROUTER_API_KEY` secret, the check runs verify itself on each agent-written change that cites a source, against records merged on the base branch. It never reads `.parley/verifications.json` from the pull request, only from the base branch.
+- **CI** (`parley check`): when the repository has an `OPENROUTER_API_KEY` secret, the check runs verify itself, on this head, on each agent-written change that cites a source, against records merged on the base branch. It never reads `.parley/verifications.json` from the pull request. From the base branch it takes only `contradicted` verdicts, which can add a failure but never clear anything.
 - **Locally** (`parley audit`, `parley ui`): results that `parley verify` saved in `.parley/verifications.json` in your checkout are used.
 
 ## Trial, 2026-11-06

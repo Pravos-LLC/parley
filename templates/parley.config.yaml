@@ -29,6 +29,15 @@ provenance:
   # Every changed clause says who wrote it, and every agent-written change cites
   # what a person said. Set to false only to adopt parley gradually.
   required: true
+  # A citation says where an agent change comes from; it does not prove it. Each
+  # agent-written change is cleared by parley verify (supported or partial, run in
+  # CI when OPENROUTER_API_KEY is set) or by the other party's approval comment.
+  # This is the only supported value.
+  agent_sources: verify-or-approve
+
+front_matter:
+  # Values the "status" key may take without a row in the change table.
+  status: [draft, proposed, agreed, signed, adopted]
 
 verify:
   # Open-weight model on OpenRouter used by `parley verify`. See docs/models.md in

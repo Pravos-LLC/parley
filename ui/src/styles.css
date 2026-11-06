@@ -12,6 +12,8 @@
   --agent-wash: #f1eeff;
   --synthetic: #e5484d;
   --synthetic-wash: #fdeeee;
+  --amber: #c27c0e;
+  --amber-wash: #fdf3e2;
   --display: 'Bricolage Grotesque Variable', 'Bricolage Grotesque', ui-sans-serif, system-ui, sans-serif;
   --body: 'Hanken Grotesk', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, monospace;
@@ -778,4 +780,29 @@ select {
   .left {
     padding-bottom: 34vh;
   }
+}
+
+/* ---------- needs a person (amber) ---------- */
+.dot.needs-person,
+.seg.needs-person,
+.clause.needs-person .rail {
+  background: var(--amber);
+}
+.clause.needs-person {
+  background: linear-gradient(90deg, var(--amber-wash), #fff 70%);
+  border-color: #f1dcb4;
+}
+.who.needs-person {
+  color: var(--amber);
+}
+.flag.amber {
+  background: var(--amber);
+}
+.chip.needs-person.on {
+  background: var(--amber);
+  border-color: var(--amber);
+}
+.clause.needs-person .reasons {
+  border-color: #ecd09b;
+  color: #8a5a06;
 }

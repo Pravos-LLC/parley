@@ -5,8 +5,8 @@ import type { CitedUtterance } from '../../src/lib/provenance.ts';
 type Snap = LedgerVersion['snapshot'][number];
 type Filter = 'all' | Origin;
 
-const ORIGIN_LABEL: Record<Origin, string> = { person: 'Written by a person', agent: 'Agent, citing what was said', synthetic: 'Synthetic: nobody asked for this' };
-const SHORT: Record<Origin, string> = { person: 'Person', agent: 'Agent, sourced', synthetic: 'Synthetic' };
+const ORIGIN_LABEL: Record<Origin, string> = { person: 'Written by a person', agent: 'Agent, cleared (verified or approved)', 'needs-person': 'Agent, cites what was said, needs a person', synthetic: 'Synthetic: nobody asked for this' };
+const SHORT: Record<Origin, string> = { person: 'Person', agent: 'Agent, cleared', 'needs-person': 'Needs a person', synthetic: 'Synthetic' };
 
 const fmtTime = (ms: number) => {
   const s = Math.floor(ms / 1000);
@@ -73,7 +73,7 @@ export function App() {
   if (!agreement || !current) return <div className="empty">No agreements yet. Add one under agreements/ and commit it.</div>;
 
   const first = agreement.versions[0];
-  const counts = current.snapshot.reduce<Record<Origin, number>>((m, c) => (/\./.test(c.id) ? ((m[c.origin] += 1), m) : m), { person: 0, agent: 0, synthetic: 0 });
+  const counts = current.snapshot.reduce<Record<Origin, number>>((m, c) => (/\./.test(c.id) ? ((m[c.origin] += 1), m) : m), { person: 0, agent: 0, 'needs-person': 0, synthetic: 0 });
   const citedIds = new Set([...(active?.cited ?? []), ...(active?.verification?.said ?? [])].map((u) => `${u.file}#${u.id}`));
 
   return (
@@ -106,7 +106,7 @@ export function App() {
           <Summary agreement={agreement} current={current} first={first} counts={counts} />
           <Rounds agreement={agreement} vIndex={vIndex} onPick={(v) => (setVersion(v), setPinned(null))} />
           <div className="filters" role="tablist">
-            {(['all', 'person', 'agent', 'synthetic'] as Filter[]).map((f) => (
+            {(['all', 'person', 'agent', 'needs-person', 'synthetic'] as Filter[]).filter((f) => f !== 'needs-person' || current.snapshot.some((c) => c.origin === 'needs-person')).map((f) => (
               <button key={f} className={`chip ${f} ${filter === f ? 'on' : ''}`} onClick={() => setFilter(f)}>
                 {f !== 'all' && <i className={`dot ${f}`} />}
                 {f === 'all' ? 'All clauses' : SHORT[f]}
@@ -153,7 +153,7 @@ function Summary({ agreement, current, first, counts }: { agreement: LedgerAgree
       </div>
       <Chart versions={agreement.versions} upto={current.n} />
       <div className="legend">
-        {(['person', 'agent', 'synthetic'] as Origin[]).map((o) => (
+        {(['person', 'agent', 'needs-person', 'synthetic'] as Origin[]).filter((o) => o !== 'needs-person' || current.byOrigin['needs-person'] > 0).map((o) => (
           <span key={o}>
             <i className={`dot ${o}`} /> {ORIGIN_LABEL[o]} <b>{n(current.byOrigin[o])}</b>
             <span className="muted"> words · {counts[o]} clauses</span>
@@ -175,6 +175,7 @@ function Chart({ versions, upto }: { versions: LedgerVersion[]; upto: number }) 
           <div key={v.n} className={`bar ${v.n > upto ? 'future' : ''} ${v.n === upto ? 'now' : ''}`} style={{ width: `${W}%` }}>
             <div className="stack">
               <span className="seg synthetic" style={{ height: h(v.byOrigin.synthetic) }} />
+              <span className="seg needs-person" style={{ height: h(v.byOrigin['needs-person'] ?? 0) }} />
               <span className="seg agent" style={{ height: h(v.byOrigin.agent) }} />
               <span className="seg person" style={{ height: h(v.byOrigin.person) }} />
             </div>
@@ -274,11 +275,12 @@ function ClauseCard({ c, version, open, onHover, onPin, onCite }: { c: Snap; ver
           <span className="num">{c.id}</span>
           <span className={`who ${c.origin}`}>{isAgent ? <AgentIcon /> : <PersonIcon />}{who(c.author)}</span>
           {c.origin === 'synthetic' && <span className="flag">Synthetic term</span>}
-          {c.origin !== 'synthetic' && c.verification?.verdict === 'unsupported' && <span className="doubt" title="parley verify found no support in the transcript. A person should read it.">Read this</span>}
+          {c.origin === 'needs-person' && <span className="flag amber">Needs a person</span>}
+          {c.origin === 'agent' && c.verification?.verdict === 'unsupported' && <span className="doubt" title="parley verify found no support in the transcript; a person of the other party approved it.">Approved, unverified</span>}
           {c.since > 1 && <span className="since">v{c.since}</span>}
         </div>
         <p className="text">{stripMarkers(c.text)}</p>
-        {(open || c.origin === 'synthetic') && (
+        {(open || c.origin === 'synthetic' || c.origin === 'needs-person') && (
           <div className="why">
             {c.cited.length > 0 ? (
               c.cited.map((u) => (
@@ -291,7 +293,7 @@ function ClauseCard({ c, version, open, onHover, onPin, onCite }: { c: Snap; ver
                 </button>
               ))
             ) : null}
-            {c.origin === 'synthetic' && c.reasons.some((r) => !/^parley verify/.test(r)) && (
+            {(c.origin === 'synthetic' || c.origin === 'needs-person') && c.reasons.some((r) => !/^parley verify/.test(r)) && (
               <ul className="reasons">
                 {c.reasons.filter((r) => !/^parley verify/.test(r)).map((r) => (
                   <li key={r}>{r}</li>

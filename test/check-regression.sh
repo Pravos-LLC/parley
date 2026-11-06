@@ -7,7 +7,7 @@
 # Usage: bash test/check-regression.sh   (after npm run build)
 set -euo pipefail
 
-unset GITHUB_ACTIONS GITHUB_TOKEN GITHUB_REPOSITORY
+unset GITHUB_ACTIONS GITHUB_TOKEN GITHUB_REPOSITORY OPENROUTER_API_KEY PARLEY_OPENROUTER_API PARLEY_GITHUB_API
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 CLI="${PARLEY_CLI:-$ROOT/dist/cli.mjs}"   # PARLEY_CLI runs these tests against another build
 TMP="$(mktemp -d)"
@@ -16,6 +16,9 @@ PASS=0
 FAILS=0
 MOCK_PID=""
 trap 'rm -rf "$TMP"; [ -n "$MOCK_PID" ] && kill "$MOCK_PID" 2>/dev/null || true' EXIT
+# Every parley process refuses network calls to anything but this machine, and logs attempts.
+export PARLEY_NET_LOG="$TMP/network.log"
+export NODE_OPTIONS="--import $ROOT/test/no-network.mjs"
 # A stand-in GitHub API for the CI-only checks (comments, approvals, instructions).
 PORT=$((20000 + RANDOM % 20000))
 ROUTES="$TMP/routes.json"
@@ -131,6 +134,42 @@ expect() { # $1 name, $2 expected exit (0 pass, 1 fail), $3 author, $4 checker (
 reset_to_base() { git checkout -q --detach "$BASE"; }
 commit() { git add -A && git commit -qm "$1"; }
 
+# CI-mode helpers: the mock GitHub API, approvals, hashes.
+FAR=2099-01-01T00:00:00Z
+PAST=2000-01-01T00:00:00Z
+routes() { node "$ROOT/test/mk-routes.mjs" "$ROUTES" "${1:-[]}" ${2:+"$2"}; }
+expect_ci() { # $1 name, $2 expected exit, $3 author
+  set +e
+  GITHUB_ACTIONS=true GITHUB_TOKEN=test-token GITHUB_REPOSITORY=acme/deal PARLEY_GITHUB_API="http://127.0.0.1:$PORT" \
+    node "$CLI" check --base "$BASE" --body-file "$TMP/body.md" --author "${3:-ana-ruiz}" --pr 7 > "$TMP/out.txt" 2>&1
+  local got=$?
+  set -e
+  if [ "$got" = "$2" ]; then PASS=$((PASS + 1)); printf 'ok   %s\n' "$1"
+  else FAILS=$((FAILS + 1)); printf 'FAIL %s (expected exit %s, got %s)\n' "$1" "$2" "$got"; sed 's/^/     /' "$TMP/out.txt"; fi
+}
+expect_civ() { # like expect_ci, with parley verify answered by the mock (routes ... <verdict>)
+  set +e
+  GITHUB_ACTIONS=true GITHUB_TOKEN=test-token GITHUB_REPOSITORY=acme/deal PARLEY_GITHUB_API="http://127.0.0.1:$PORT" \
+    OPENROUTER_API_KEY=test-key PARLEY_OPENROUTER_API="http://127.0.0.1:$PORT/openrouter" \
+    node "$CLI" check --base "$BASE" --body-file "$TMP/body.md" --author "${3:-ana-ruiz}" --pr 7 > "$TMP/out.txt" 2>&1
+  local got=$?
+  set -e
+  if [ "$got" = "$2" ]; then PASS=$((PASS + 1)); printf 'ok   %s\n' "$1"
+  else FAILS=$((FAILS + 1)); printf 'FAIL %s (expected exit %s, got %s)\n' "$1" "$2" "$got"; sed 's/^/     /' "$TMP/out.txt"; fi
+}
+expect_output() { # $1 name, $2 regex the last run's output must match
+  if grep -Eq "$2" "$TMP/out.txt"; then PASS=$((PASS + 1)); printf 'ok   %s\n' "$1"
+  else FAILS=$((FAILS + 1)); printf 'FAIL %s (output does not match /%s/)\n' "$1" "$2"; sed 's/^/     /' "$TMP/out.txt"; fi
+}
+hash_of() { # $1 clause: its current hash, as the checker computes it
+  (node "$CLI" check --base "$BASE" --body-file /dev/null --json 2>/dev/null || true) | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);process.stdout.write((r.findings.find(f=>f.clause===process.argv[1])||{}).hash||"")})' "$1"
+}
+edit_32() { sed -i.bak "s/^Fleetwise reviews the work every Friday\.\$/$1/" "$MOU" && rm -f "$MOU.bak"; }
+for_prov() { reset_to_base; git checkout -q --detach zz-prov; BASE=zz-prov; }
+until curl -s "http://127.0.0.1:$PORT/" > /dev/null 2>&1; do sleep 0.1; done
+routes '[]'
+row_hash() { node "$ROOT/test/row-hash.mjs" "$ISSUES" "$1"; }   # $1 issue id, as the checker hashes its row
+
 ROW='| 3.1 | a | b | margin | test | Marcus | MOU-01 | no |'
 
 # --- Agreement change, issues list unchanged ---
@@ -195,8 +234,17 @@ expect "Fleetwise editing its own position passes" 0 marcus-okafor
 reset_to_base; issues_list 1 open "pay on receipt" yes; commit "reopen MOU-01"
 printf '**Discussed live:** Not yet\n' > "$TMP/body.md";                         expect "reopening an agreed issue without approval fails" 1
 printf '**Discussed live:** Not yet\n**Reopen approved by:** Marcus, PR comment link\n' > "$TMP/body.md"; expect "reopening with an approval but no link fails" 1
-printf '**Discussed live:** Not yet\n**Reopen approved by:** Marcus, MOU-01, https://github.com/x/y/pull/1#issuecomment-1\n' > "$TMP/body.md"; expect "reopening with the other party's linked approval passes" 0
-printf '**Discussed live:** Not yet\n**Reopen approved by:** Ana, MOU-01, https://github.com/x/y/pull/1#issuecomment-1\n' > "$TMP/body.md"; expect "reopen approved only by the author's own side fails" 1
+printf '**Discussed live:** Not yet\n**Reopen approved by:** Marcus, MOU-01, https://github.com/x/y/pull/1#issuecomment-1\n' > "$TMP/body.md"; expect "R-M3: a body line linking a comment no longer reopens an issue" 1
+printf '**Discussed live:** Not yet\n' > "$TMP/body.md"
+routes "[{\"id\":51,\"login\":\"marcus-okafor\",\"body\":\"reopen MOU-01 #$(row_hash MOU-01)\",\"created\":\"$FAR\"}]"
+expect_ci "R-M3: the other party commenting 'reopen MOU-01 #<row hash>' reopens it" 0
+routes "[{\"id\":51,\"login\":\"ana-ruiz\",\"body\":\"reopen MOU-01 #$(row_hash MOU-01)\",\"created\":\"$FAR\"}]"
+expect_ci "reopen approved only by the author's own side fails" 1
+routes "[{\"id\":51,\"login\":\"marcus-okafor\",\"body\":\"reopen MOU-01 #0123456789ab\",\"created\":\"$FAR\"}]"
+expect_ci "R-M3: a reopen comment with another row hash fails" 1
+routes "[{\"id\":51,\"login\":\"marcus-okafor\",\"body\":\"reopen MOU-01 #$(row_hash MOU-01)\",\"created\":\"$PAST\"}]"
+expect_ci "R-M3: a reopen comment from before the latest push fails" 1
+routes '[]'
 printf '**Discussed live:** Not yet\n**Reopen approved by:** Marcus, https://github.com/x/y/pull/1#issuecomment-1\n' > "$TMP/body.md"; expect "reopen approval without the issue ID fails" 1
 printf '**Discussed live:** Not yet\n**Reopen approved by:** Marcus, MOU-01, https://example.com\n' > "$TMP/body.md"; expect "reopen approval with a non-comment link fails" 1
 printf '**Discussed live:** Not yet\n**Reopen approved by:** Marcus, MOU-01, records/no-such-call.md\n' > "$TMP/body.md"; expect "reopen approval citing a missing records note fails" 1
@@ -205,7 +253,10 @@ printf '**Discussed live:** Not yet\n' > "$TMP/body.md";                        
 
 reset_to_base; issues_list 1 agreed "pay on receipt" yes; sed -i.bak 's/| MOU-02 | 4.1 | Ana | cash | defer | pay on receipt | none given | open | |/| MOU-02 | 4.1 | Ana | cash | defer | pay on receipt | none given | agreed | |/' "$ISSUES" && rm -f "$ISSUES.bak"; commit "mark MOU-02 agreed"
 printf '**Discussed live:** Not yet\n' > "$TMP/body.md";                         expect "marking an issue agreed one-sidedly fails" 1
-printf '**Discussed live:** Not yet\n**Agreed by:** Marcus, MOU-02, https://github.com/x/y/pull/1#issuecomment-1\n' > "$TMP/body.md"; expect "marking agreed with the other party's linked agreement passes" 0
+printf '**Discussed live:** Not yet\n' > "$TMP/body.md"
+routes "[{\"id\":52,\"login\":\"marcus-okafor\",\"body\":\"agree MOU-02 #$(row_hash MOU-02)\",\"created\":\"$FAR\"}]"
+expect_ci "R-M3: the other party commenting 'agree MOU-02 #<row hash>' marks it agreed" 0
+routes '[]'
 reset_to_base; issues_list 1 agreed "pay on receipt" yes; printf '| MOU-03 | 3.2 | Ana | ownership | own it | | none given | agreed | |\n' >> "$ISSUES"; commit "new agreed issue"
 printf '**Discussed live:** Not yet\n' > "$TMP/body.md";                         expect "a new issue already marked agreed fails" 1
 reset_to_base; issues_list 1 agreed "pay on receipt" yes; printf '| MOU-03 | 3.2 | Ana | ownership | own it | accepts | none given | open | |\n' >> "$ISSUES"; commit "new issue with other position"
@@ -258,7 +309,7 @@ printf '**Discussed live:** Not yet\n**Agreed by:** Marcus, MOU-02, records/2026
 reset_to_base; printf 'Call: Marcus agreed MOU-02.\n' > records/2026-11-05-call.md; commit "real note"; git branch -q -f zz-base7
 issues_list 1 agreed "pay on receipt" yes; sed -i.bak 's/| none given | open | |/| none given | agreed | |/' "$ISSUES" && rm -f "$ISSUES.bak"; commit "agree via existing note"
 BASE=zz-base7
-printf '**Discussed live:** Not yet\n**Agreed by:** Marcus, MOU-02, records/2026-11-05-call.md\n' > "$TMP/body.md"; expect "approval citing an earlier note that names the issue passes" 0
+printf '**Discussed live:** Not yet\n**Agreed by:** Marcus, MOU-02, records/2026-11-05-call.md\n' > "$TMP/body.md"; expect "R-M3: a merged record naming the issue no longer marks it agreed" 1
 BASE=zz-base
 reset_to_base; issues_list 1 agreed "pay on receipt" yes; sed -i.bak 's/| none given | open | |/| none given | agreed | |/' "$ISSUES" && rm -f "$ISSUES.bak"; commit "agree in CI without token"
 printf '**Discussed live:** Not yet\n**Agreed by:** Marcus, MOU-02, https://github.com/x/y/pull/1#issuecomment-1\n' > "$TMP/body.md"
@@ -281,24 +332,32 @@ BASE=zz-base
 reset_to_base; set_status proposed; set_provenance true; commit "provenance on"; git branch -q -f zz-prov
 BASE=zz-prov
 edit_clause ", net of its costs"; commit "agent edits 3.1"
-pbody "" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | $REC#u001 |"; expect "agent change citing a merged utterance passes" 0
+pbody "" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | $REC#u001 |"; expect "R-H1: an agent change citing a merged utterance needs a person (local, no verify)" 1
+expect_output "R-H1: it is reported as needing a person" "NEEDS A PERSON"
+routes "[{\"id\":61,\"login\":\"marcus-okafor\",\"body\":\"approve 3.1 #$(hash_of 3.1)\",\"created\":\"$FAR\"}]"
+expect_ci "R-H1: the same change passes once the other party approves its hash" 0
+routes '[]'
 pbody "" "| 3.1 | a | b | margin | Ana | Ana Ruiz | |";                         expect "human-authored change passes" 0
 pbody "" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | |";          expect "agent change with no Source is a synthetic term" 1
 pbody "" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | $REC#u099 |"; expect "agent change citing a missing utterance fails" 1
 pbody "" "| 3.1 | a | b | margin | Ana | | |";                                  expect "change with no Author fails" 1
 pbody "" "| 3.1 | a | b | margin | Ana | Someone Else | |";                      expect "Author who is neither a party person nor an agent fails" 1
 pbody "" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | instruction by Ana Ruiz |"; expect "agent change citing an unlinked instruction fails" 1
-pbody "" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | instruction by Ana Ruiz, https://github.com/x/y/pull/1#issuecomment-5 |"; expect "agent change citing a linked instruction is accepted locally (CI verifies it)" 0
+pbody "" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | instruction by Ana Ruiz, https://github.com/x/y/pull/1#issuecomment-5 |"; expect "an instruction comment cannot be checked locally, so it needs a person" 1
 pbody "**Approved synthetic:** 3.1 #0123456789ab, Ana Ruiz, https://github.com/x/y/pull/1#issuecomment-7" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | |"; expect "an approval line in the PR body never approves a synthetic term" 1
 # Before/after: the same supported change loses its Source and turns synthetic.
-pbody "" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | $REC#u001 |"; expect "before: supported change passes" 0
-pbody "" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | |";          expect "after: same change without its Source fails" 1
+routes '[]' supported
+pbody "" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | $REC#u001 |"; expect_civ "before: a sourced change that verify supports passes" 0
+pbody "" "| 3.1 | a | b | margin | Ana | agent:northlight-drafter | |";          expect_civ "after: the same change without its Source fails (verify never clears a missing source)" 1
+routes '[]'
 # Trailers instead of table columns.
 reset_to_base; git checkout -q --detach zz-prov; edit_clause ", net of its costs"; git add -A; git commit -qm "agent edits 3.1
 
 Parley-Author: agent:northlight-drafter
 Parley-Source: $REC#u001"
-body "2026-11-01 call" "" '| 3.1 | a | b | | why | Ana | | |';                   expect "trailer provenance with a Source passes" 0
+routes "[{\"id\":63,\"login\":\"marcus-okafor\",\"body\":\"approve 3.1 #$(hash_of 3.1)\",\"created\":\"$FAR\"}]"
+body "2026-11-01 call" "" '| 3.1 | a | b | | why | Ana | | |';                   expect_ci "trailer provenance with a Source passes once approved" 0
+routes '[]'
 reset_to_base; git checkout -q --detach zz-prov; edit_clause ", net of its costs"; git add -A; git commit -qm "agent edits 3.1
 
 Parley-Author: agent:northlight-drafter"
@@ -324,29 +383,6 @@ if grep -q 'pull_request_target' "$TMP/wf.yml" && grep -q 'git show "origin/$BAS
 # Review findings (code-review-parley-pr1): the reviewer's adversarial cases and one or
 # more cases per finding. CI-only behavior runs against the mock GitHub API.
 # =====================================================================================
-FAR=2099-01-01T00:00:00Z
-PAST=2000-01-01T00:00:00Z
-routes() { node "$ROOT/test/mk-routes.mjs" "$ROUTES" "${1:-[]}"; }
-expect_ci() { # $1 name, $2 expected exit, $3 author
-  set +e
-  GITHUB_ACTIONS=true GITHUB_TOKEN=test-token GITHUB_REPOSITORY=acme/deal PARLEY_GITHUB_API="http://127.0.0.1:$PORT" \
-    node "$CLI" check --base "$BASE" --body-file "$TMP/body.md" --author "${3:-ana-ruiz}" --pr 7 > "$TMP/out.txt" 2>&1
-  local got=$?
-  set -e
-  if [ "$got" = "$2" ]; then PASS=$((PASS + 1)); printf 'ok   %s\n' "$1"
-  else FAILS=$((FAILS + 1)); printf 'FAIL %s (expected exit %s, got %s)\n' "$1" "$2" "$got"; sed 's/^/     /' "$TMP/out.txt"; fi
-}
-expect_output() { # $1 name, $2 regex the last run's output must match
-  if grep -Eq "$2" "$TMP/out.txt"; then PASS=$((PASS + 1)); printf 'ok   %s\n' "$1"
-  else FAILS=$((FAILS + 1)); printf 'FAIL %s (output does not match /%s/)\n' "$1" "$2"; sed 's/^/     /' "$TMP/out.txt"; fi
-}
-hash_of() { # $1 clause: its current hash, as the checker computes it
-  (node "$CLI" check --base "$BASE" --body-file /dev/null --json 2>/dev/null || true) | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);process.stdout.write((r.findings.find(f=>f.clause===process.argv[1])||{}).hash||"")})' "$1"
-}
-edit_32() { sed -i.bak "s/^Fleetwise reviews the work every Friday\.\$/$1/" "$MOU" && rm -f "$MOU.bak"; }
-for_prov() { reset_to_base; git checkout -q --detach zz-prov; BASE=zz-prov; }
-until curl -s "http://127.0.0.1:$PORT/" > /dev/null 2>&1; do sleep 0.1; done
-routes '[]'
 
 # --- H4 / A1: an unclosed front matter cannot hide an inserted term ---
 for_prov
@@ -372,7 +408,7 @@ expect "A2 (H2): a body line citing a record where the approver says 'I reject 3
 pbody "" "| 3.2 | a | b | x | Ana | agent:northlight-drafter | |"
 routes "[{\"id\":11,\"login\":\"marcus-okafor\",\"body\":\"approve 3.2 #$H32\",\"created\":\"$FAR\"}]"
 expect_ci "H2: the other party's comment 'approve 3.2 #<hash>' after the push approves it" 0
-expect_output "H2: counted as approved by the other party" "1 approved by the other party"
+expect_output "H2: counted as approved by the other party" "1 synthetic but approved by the other party"
 routes "[{\"id\":11,\"login\":\"marcus-okafor\",\"body\":\"I reject 3.2 #$H32 outright\",\"created\":\"$FAR\"}]"
 expect_ci "H2: a comment that names the hash but rejects it does not approve" 1
 routes "[{\"id\":11,\"login\":\"marcus-okafor\",\"body\":\"approve 3.2 #$H32\",\"created\":\"$FAR\",\"updated\":\"2099-01-02T00:00:00Z\"}]"
@@ -397,19 +433,30 @@ pbody "" "| 4.1 | a | b | x | Ana | agent:northlight-drafter | instruction from 
 expect "H3: a record path with no utterance is not an instruction" 1
 for_prov; edit_32 "Fleetwise reviews the work every Friday afternoon."; commit "agent edits 3.2 per Marcus"
 pbody "" "| 3.2 | a | b | x | Marcus | agent:northlight-drafter | instruction by Marcus Okafor, $REC#u003 |"
-expect "H3: Marcus's own utterance naming the change's key words is an instruction" 0
+expect "R-H2: Marcus's own utterance is not enough on its own: it needs a person (no verify)" 1
+routes '[]' supported
+expect_civ "R-H2: Marcus's utterance clears once verify says it supports the clause" 0
+routes '[]' contradicted
+expect_civ "R-H2: and fails when verify finds the clause contradicted" 1
+routes '[]'
 pbody "" "| 3.2 | a | b | x | Marcus | agent:northlight-drafter | instruction by Ana Ruiz, $REC#u003 |"
 expect "H3: an utterance spoken by someone else is not that person's instruction" 1
 pbody "" "| 3.2 | a | b | x | Marcus | agent:northlight-drafter | instruction by Marcus Okafor, $REC#u002 |"
-expect "H3: an utterance by the person that is not about the clause is not an instruction" 1
+expect "H3: an utterance by the person that is not about the clause needs a person" 1
+pbody "" "| 3.2 | a | b | x | Marcus | agent:northlight-drafter | instruction by Marcus Okafor, $REC#u005 |"
+expect_ci "R-H2 (N2): Marcus refusing 3.2 ('I reject 3.2 outright') is not an instruction" 1
 routes "[{\"id\":21,\"login\":\"marcus-okafor\",\"body\":\"Please make 3.2 Friday afternoons.\",\"created\":\"$PAST\"}]"
 pbody "" "| 3.2 | a | b | x | Marcus | agent:northlight-drafter | instruction by Marcus Okafor, https://github.com/acme/deal/pull/7#issuecomment-21 |"
-expect_ci "H3: Marcus's unedited comment on this PR naming 3.2 is an instruction" 0
-routes "[{\"id\":21,\"login\":\"marcus-okafor\",\"body\":\"Please make 3.2 Friday afternoons.\",\"created\":\"$PAST\",\"updated\":\"$FAR\"}]"
+expect_ci "R-H2: a comment that only mentions 3.2 is not an instruction" 1
+routes "[{\"id\":21,\"login\":\"marcus-okafor\",\"body\":\"No. 3.2 is not acceptable.\",\"created\":\"$PAST\"}]"
+expect_ci "R-H2: a comment refusing 3.2 is not an instruction" 1
+routes "[{\"id\":21,\"login\":\"marcus-okafor\",\"body\":\"instruct 3.2: make the reviews Friday afternoons\",\"created\":\"$PAST\"}]"
+expect_ci "H3: Marcus's unedited comment 'instruct 3.2: ...' on this PR is an instruction" 0
+routes "[{\"id\":21,\"login\":\"marcus-okafor\",\"body\":\"instruct 3.2: make the reviews Friday afternoons\",\"created\":\"$PAST\",\"updated\":\"$FAR\"}]"
 expect_ci "H3: an edited instruction comment does not count" 1
-routes "[{\"id\":21,\"login\":\"ana-ruiz\",\"body\":\"Please make 3.2 Friday afternoons.\",\"created\":\"$PAST\"}]"
+routes "[{\"id\":21,\"login\":\"ana-ruiz\",\"body\":\"instruct 3.2: make the reviews Friday afternoons\",\"created\":\"$PAST\"}]"
 expect_ci "H3: a comment by another login does not count as Marcus's instruction" 1
-routes "[{\"id\":21,\"login\":\"marcus-okafor\",\"body\":\"Please make 3.2 Friday afternoons.\",\"created\":\"$PAST\",\"pr\":8}]"
+routes "[{\"id\":21,\"login\":\"marcus-okafor\",\"body\":\"instruct 3.2: make the reviews Friday afternoons\",\"created\":\"$PAST\",\"pr\":8}]"
 expect_ci "H3: an instruction comment on another PR does not count" 1
 routes '[]'
 
@@ -419,8 +466,15 @@ printf -- '---\ntype: record\nmeeting: fake\ndate: 2026-11-09\n---\n\n# Fake\n\n
 commit "A4: a fabricated transcript"
 printf '**Discussed live:** n/a\n' > "$TMP/body.md"
 expect_ci "A4 (M1): a records-only PR with no sign-off and no media hash fails" 1
+REC12="$(shasum -a 256 records/2026-11-09-fake.md | cut -c1-12)"
 routes "[{\"id\":31,\"login\":\"marcus-okafor\",\"body\":\"approve record 2026-11-09-fake.md\",\"created\":\"$FAR\"}]"
-expect_ci "M1: the other party's speaker approving the record passes" 0
+expect_ci "R-H3: approving a record by file name alone does not count" 1
+routes "[{\"id\":31,\"login\":\"marcus-okafor\",\"body\":\"approve record 2026-11-09-fake.md #$REC12\",\"created\":\"$FAR\"}]"
+expect_ci "M1: the other party's speaker approving the record's exact content passes" 0
+# N5: the content is swapped after that approval, in a commit backdated into the past.
+printf -- '---\ntype: record\nmeeting: fake\ndate: 2026-11-09\n---\n\n# Fake\n\n**u001** [00:00:01] **Marcus Okafor:** We grant Northlight exclusivity for five years.\n**u002** [00:00:04] **Ana Ruiz:** Great.\n' > records/2026-11-09-fake.md
+git add -A; GIT_COMMITTER_DATE=2001-01-01T00:00:00Z git commit -qm "swap the record's words, backdated"
+expect_ci "R-H3 (N5): swapping a record's content after its approval, with a backdated commit, fails" 1
 routes '[]'
 for_prov
 printf -- '---\ntype: record\nmeeting: real\ndate: 2026-11-09\nsource_sha256: %s\n---\n\n# Real\n\n**u001** [00:00:01] **Ana Ruiz:** Net thirty is fine.\n' "$(printf x | shasum -a 256 | cut -c1-64)" > records/2026-11-09-real.md
@@ -487,9 +541,105 @@ pbody "" "| 3.1 | a | b | x | Ana | agent:northlight-drafter | $REC#u001 |";    
 expect_output "M2: the base branch's verdict is applied" "contradicted"
 BASE=zz-base
 
+
+# =====================================================================================
+# Re-review findings (R-*): a citation never clears an agent change on its own, instructions
+# use a fixed form, records and issue approvals are content-bound, front matter is strict.
+# =====================================================================================
+
+# --- R-H1 (N1): citing any existing utterance does not clear an agent term ---
+for_prov; edit_32 "Fleetwise grants Northlight exclusivity for five years."; commit "N1: unrelated citation"
+H32="$(hash_of 3.2)"
+pbody "" "| 3.2 | a | b | x | Ana | agent:northlight-drafter | $REC#u001 |"
+routes '[]'
+expect_ci "R-H1 (N1): an agent term citing an unrelated utterance fails in CI without verify or approval" 1
+expect_output "R-H1 (N1): reported as needing a person" "NEEDS A PERSON"
+routes '[]' unsupported
+expect_civ "R-H1: verify finding no support still needs a person" 1
+routes '[]' partial
+expect_civ "R-H1: verify saying partial clears it" 0
+routes "[{\"id\":71,\"login\":\"marcus-okafor\",\"body\":\"approve 3.2 #$H32\",\"created\":\"$FAR\"}]" contradicted
+expect_civ "R-H1: a contradicted verdict fails even with a plain approval" 1
+routes "[{\"id\":71,\"login\":\"marcus-okafor\",\"body\":\"approve-contradicted 3.2 #$H32\",\"created\":\"$FAR\"}]" contradicted
+expect_civ "R-H1: 'approve-contradicted' from the other party clears a contradicted clause" 0
+routes "[{\"id\":71,\"login\":\"ana-ruiz\",\"body\":\"approve 3.2 #$H32\",\"created\":\"$FAR\"}]"
+expect_ci "R-H1: an approval from the PR author's own party does not clear a citation" 1
+routes '[]'
+if grep -q 'agent_sources: verify-or-approve' "$ROOT/templates/parley.config.yaml"; then PASS=$((PASS + 1)); echo "ok   R-H1: init writes provenance.agent_sources: verify-or-approve"; else FAILS=$((FAILS + 1)); echo "FAIL R-H1: init writes provenance.agent_sources: verify-or-approve"; fi
+for_prov; sed -i.bak 's/^  required: true$/  required: true\
+  agent_sources: cite/' parley.config.yaml && rm -f parley.config.yaml.bak; commit "base: weaker agent_sources"; git branch -q -f zz-weak
+edit_32 "Fleetwise grants Northlight exclusivity for five years."; commit "N1 on a base that asks for less"
+BASE=zz-weak
+pbody "" "| 3.2 | a | b | x | Ana | agent:northlight-drafter | $REC#u001 |"
+expect "R-H1: a config asking for anything but verify-or-approve fails" 1
+BASE=zz-prov
+
+# --- R-L1: the approval is the whole line; one comment can approve several clauses ---
+for_prov; edit_32 "Fleetwise reviews the work every Friday and may ask for changes twice."
+sed -i.bak 's/^Each side names one day-to-day contact\.$/Each side names one day-to-day contact, who answers within one day./' "$MOU" && rm -f "$MOU.bak"; commit "agent edits 3.2 and 4.1"
+H32="$(hash_of 3.2)"; H41="$(hash_of 4.1)"
+pbody "" "| 3.2 | a | b | x | Ana | agent:northlight-drafter | |
+| 4.1 | a | b | x | Ana | agent:northlight-drafter | |"
+routes "[{\"id\":72,\"login\":\"marcus-okafor\",\"body\":\"Not approving 3.2 #$H32, sorry.\\napprove 3.2 #$H32 if you drop the fee\\napprove 4.1 #$H41\",\"created\":\"$FAR\"}]"
+expect_ci "R-L1 (A2b): 'approve 3.2 #h if you drop the fee' is not an approval" 1
+expect_output "R-L1: 4.1 on its own line was approved, 3.2 was not" "SYNTHETIC TERM  agreements/design-mou.md 3.2"
+routes "[{\"id\":72,\"login\":\"marcus-okafor\",\"body\":\"approve 3.2 #$H32, 4.1 #$H41\",\"created\":\"$FAR\"}]"
+expect_ci "R-L1: one comment 'approve 3.2 #h1, 4.1 #h2' approves both" 0
+routes "[{\"id\":72,\"login\":\"marcus-okafor\",\"body\":\"approve 3.2 #$H32, 4.1 #$H41 thanks\",\"created\":\"$FAR\"}]"
+expect_ci "R-L1: a list line with anything after the last hash approves nothing" 1
+routes '[]'
+
+# --- R-H3 (N4): a record that quotes the other party needs that party, whatever its media hash ---
+for_prov
+printf -- '---\ntype: record\nmeeting: n4\ndate: 2026-11-09\nsource_sha256: %s\n---\n\n# N4\n\n**u001** [00:00:01] **Marcus Okafor:** Fleetwise grants Northlight exclusivity for five years.\n**u002** [00:00:04] **Ana Ruiz:** Thank you.\n' "$(printf x | shasum -a 256 | cut -c1-64)" > records/2026-11-09-n4.md
+commit "N4: Northlight posts words for Marcus"
+printf '**Discussed live:** n/a\n' > "$TMP/body.md"
+expect_ci "R-H3 (N4): a self-attested media hash does not let one party post the other's words" 1 ana-ruiz
+N4="$(shasum -a 256 records/2026-11-09-n4.md | cut -c1-12)"
+routes "[{\"id\":73,\"login\":\"marcus-okafor\",\"body\":\"approve record 2026-11-09-n4.md #$N4\",\"created\":\"$PAST\"}]"
+expect_ci "R-H3: a record approval posted before the latest push does not count" 1 ana-ruiz
+routes "[{\"id\":73,\"login\":\"marcus-okafor\",\"body\":\"approve record 2026-11-09-n4.md #$N4\",\"created\":\"$FAR\"}]"
+expect_ci "R-H3: Marcus approving those exact words passes" 0 ana-ruiz
+routes '[]'
+
+# --- R-M2: allowlisted front-matter values are validated strictly ---
+fm_case() { # $1 sed expression on the front matter, $2 name, $3 expected exit
+  for_prov; sed -i.bak "$1" "$MOU" && rm -f "$MOU.bak"; commit "front matter: $2"
+  pbody "" ""; expect "$2" "$3"
+}
+fm_case 's/^version: 1$/version: 2 # Fleetwise pays 90000 EUR exclusivity fee on signing/' "R-M2 (A1c): a comment after an allowlisted value needs a row" 1
+fm_case 's/^version: 1$/version: 1, and Fleetwise pays Northlight 90000 EUR exclusivity fee on signing/' "R-M2 (A1d): text after an allowlisted value needs a row" 1
+fm_case 's/^version: 1$/version: 1.2.3/' "R-M2: version 1.2.3 needs no row" 0
+fm_case 's/^title: Design MOU$/title: Design MOU\
+status: agreed/' "R-M2: a configured status value needs no row" 0
+fm_case 's/^title: Design MOU$/title: Design MOU\
+status: exclusive-for-five-years/' "R-M2: a status outside the configured values needs a row" 1
+fm_case 's/^title: Design MOU$/title: Design MOU\
+date: 2026-02-30/' "R-M2: an impossible date needs a row" 1
+fm_case 's/^title: Design MOU$/title: Design MOU\
+date: 2026-11-20/' "R-M2: an ISO date needs no row" 0
+
+# --- R-L2: before adoption, issues lists follow the basic disclosure rule ---
+for_prov; issues_list 1 agreed "pay on receipt" yes; printf '| MOU-03 | 3.2 | Ana | x | exclusivity please | | none given | open | |\n' >> "$ISSUES"; commit "new issue before adoption"
+printf '**Discussed live:** n/a\n' > "$TMP/body.md"
+expect "R-L2: an issues-list change before adoption with no change table fails" 1
+printf '**Discussed live:** n/a\n\n| Clause | Before | After | Why | Asked for by | Author | Source |\n|---|---|---|---|---|---|---|\n| issues/design-mou.md MOU-03 | - | new | x | Ana | Ana Ruiz | |\n' > "$TMP/body.md"
+expect "R-L2: the same change with a row for MOU-03 passes" 0
+
+# --- R-M1: the workflow posts a "parley" commit status on the PR head ---
+WF="$ROOT/templates/github/workflows/parley.yml"
+if grep -q 'statuses: write' "$WF" && grep -q 'statuses/\$HEAD_SHA' "$WF" && grep -q 'context=parley' "$WF" && grep -q 'issue_comment' "$WF"; then PASS=$((PASS + 1)); echo "ok   R-M1: both events post the parley status on the PR head"; else FAILS=$((FAILS + 1)); echo "FAIL R-M1: both events post the parley status on the PR head"; fi
+
 # --- L2: workflow hardening (template) ---
 WF="$ROOT/templates/github/workflows/parley.yml"
 if grep -q 'persist-credentials: false' "$WF" && ! grep -Eq 'uses: [^@]+@v[0-9]' "$WF" && grep -q 'The checker was removed' "$WF"; then PASS=$((PASS + 1)); echo "ok   L2/M1: workflow pins actions by SHA, keeps no token, fails when the checker is removed"; else FAILS=$((FAILS + 1)); echo "FAIL L2/M1: workflow hardening"; fi
+
+# --- R-L3: the suite never reaches the network, and the guard really blocks ---
+if [ ! -s "$PARLEY_NET_LOG" ]; then PASS=$((PASS + 1)); echo "ok   R-L3: no test made a network call"; else FAILS=$((FAILS + 1)); echo "FAIL R-L3: network calls were attempted:"; sed 's/^/     /' "$PARLEY_NET_LOG"; fi
+set +e
+GITHUB_ACTIONS=true GITHUB_TOKEN=t GITHUB_REPOSITORY=acme/deal node "$CLI" check --base "$BASE" --body-file "$TMP/body.md" --author ana-ruiz --pr 7 > /dev/null 2>&1
+set -e
+if grep -q 'api.github.com' "$PARLEY_NET_LOG" 2>/dev/null; then PASS=$((PASS + 1)); echo "ok   R-L3: the guard catches a call to the real GitHub API"; else FAILS=$((FAILS + 1)); echo "FAIL R-L3: the guard did not catch a real network call"; fi
 
 printf '\n%s passed, %s failed\n' "$PASS" "$FAILS"
 [ "$FAILS" = 0 ]

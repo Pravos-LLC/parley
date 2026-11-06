@@ -11,6 +11,8 @@ export interface Party {
   aliases: string[];
   /** A person's own GitHub login, when the config gives one (people: [{ name, login }]). */
   personLogins: Record<string, string>;
+  /** Agent ids that draft for this party (agents: [northlight-drafter]). */
+  agents: string[];
 }
 
 export interface ParleyConfig {
@@ -18,7 +20,9 @@ export interface ParleyConfig {
   parties: Party[];
   materialTerms: string[];
   paths: { agreements: string; records: string; issues: string };
-  provenance: { required: boolean };
+  provenance: { required: boolean; agentSources: string };
+  /** Allowed values for the front-matter "status" key. */
+  frontMatterStatus: string[];
   verify: { model: string; minConfidence: number };
 }
 
@@ -63,6 +67,7 @@ export function parseConfig(text: string): ParleyConfig {
       people,
       aliases: asList(p.aliases),
       personLogins,
+      agents: asList(p.agents).map((a) => a.replace(/^agent:/i, '')),
     };
   });
   return {
@@ -74,7 +79,8 @@ export function parseConfig(text: string): ParleyConfig {
       records: String(raw.paths?.records ?? 'records'),
       issues: String(raw.paths?.issues ?? 'agreements/issues'),
     },
-    provenance: { required: raw.provenance?.required !== false },
+    provenance: { required: raw.provenance?.required !== false, agentSources: String(raw.provenance?.agent_sources ?? 'verify-or-approve') },
+    frontMatterStatus: raw.front_matter?.status ? asList(raw.front_matter.status) : ['draft', 'proposed', 'agreed', 'signed', 'adopted'],
     verify: {
       model: String(raw.verify?.model ?? DEFAULT_MODEL),
       minConfidence: Number(raw.verify?.min_confidence ?? 0.5),
@@ -152,4 +158,10 @@ export function isAgreementFile(config: ParleyConfig, file: string): boolean {
 export function isIssuesList(config: ParleyConfig, file: string): boolean {
   const I = config.paths.issues.replace(/\/$/, '');
   return file.startsWith(`${I}/`) && /\.md$/i.test(file) && !/(^|\/)(README|TEMPLATE)\.md$/i.test(file);
+}
+
+/** The party an agent drafts for, if the config says. */
+export function partyOfAgent(parties: Party[], author: string): Party | null {
+  const id = author.trim().replace(/^agent:/i, '').toLowerCase();
+  return parties.find((p) => p.agents.some((a) => a.toLowerCase() === id)) ?? null;
 }

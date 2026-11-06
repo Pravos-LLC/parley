@@ -17,8 +17,21 @@ export function frontMatterState(text: string): FrontMatterState {
   return frontMatterEnd(lines) > 0 ? 'closed' : 'open';
 }
 
-/** Front-matter keys that may change without a row in the change table. */
-export const FRONT_MATTER_ALLOWLIST = /^\s*(version|date|status)\s*:/i;
+export const DEFAULT_STATUSES = ['draft', 'proposed', 'agreed', 'signed', 'adopted'];
+
+/**
+ * A front-matter line that may change without a row: exactly "version: 2" (or 1.2.3), "date:
+ * 2026-10-14" (a real date) or "status: <one of the configured values>", with nothing else on
+ * the line. Anything more is a change to the front matter that needs a row.
+ */
+export function allowlistedFrontMatterLine(line: string, statuses: string[] = DEFAULT_STATUSES): boolean {
+  const l = line.replace(/\s+$/, '');
+  if (/^version: \d+(\.\d+)*$/.test(l)) return true;
+  const d = l.match(/^date: (\d{4}-\d{2}-\d{2})$/);
+  if (d) return !Number.isNaN(Date.parse(`${d[1]}T00:00:00Z`)) && new Date(`${d[1]}T00:00:00Z`).toISOString().startsWith(d[1]);
+  const st = l.match(/^status: ([A-Za-z][\w-]*)$/);
+  return Boolean(st && statuses.includes(st[1]));
+}
 
 const TABLE_ROW_ID = /^\|\s*\**(\d+(?:\.\d+)*)\**\s*\|/;
 
@@ -100,14 +113,14 @@ export function clauseTextById(text: string, id: string): string {
  * Any change inside front matter, or to its fences, touches the pseudo-clause "front-matter",
  * except a line that only sets an allowlisted key (version, date, status).
  */
-export function touchedClauses(git: Git, from: string, to: string, file: string): Set<string> {
+export function touchedClauses(git: Git, from: string, to: string, file: string, statuses: string[] = DEFAULT_STATUSES): Set<string> {
   const oldMap = clauseMap(git.show(from, file));
   const newMap = clauseMap(git.show(to, file));
   const diff = git.diffU0(from, to, file);
   const touched = new Set<string>();
   const add = (id: string | undefined, content: string) => {
     const clause = id ?? 'end';
-    if (clause === 'front-matter' && FRONT_MATTER_ALLOWLIST.test(content)) return;
+    if (clause === 'front-matter' && allowlistedFrontMatterLine(content, statuses)) return;
     touched.add(clause);
   };
   let oLine = 0;

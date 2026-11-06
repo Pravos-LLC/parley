@@ -26,19 +26,20 @@ cd "$TARGET"
 git init -q -b main
 git config commit.gpgsign false
 
-commit() { # $1 who (ana|fleet|north), $2 date, $3 message file or text
+commit() { # $1 who (ana|marcus|fleet|north), $2 date, $3 message file or text
   case "$1" in
     ana) n="Ana Ruiz"; e="ana@northlight.example" ;;
+    marcus) n="Marcus Okafor"; e="marcus@fleetwise.example" ;;
     fleet) n="fleetwise-counsel (agent)"; e="agent@fleetwise.example" ;;
     north) n="northlight-drafter (agent)"; e="agent@northlight.example" ;;
   esac
   git add -A
   if [ -f "$3" ]; then msg=(-F "$3"); else msg=(-m "$3"); fi
   GIT_AUTHOR_NAME="$n" GIT_AUTHOR_EMAIL="$e" GIT_COMMITTER_NAME="$n" GIT_COMMITTER_EMAIL="$e" \
-    GIT_AUTHOR_DATE="$2" GIT_COMMITTER_DATE="$2" git commit -q "${msg[@]}"
+    GIT_AUTHOR_DATE="$2" GIT_COMMITTER_DATE="$2" git commit -q --allow-empty "${msg[@]}"
 }
 
-node "$CLI" init --party "Northlight Studio=ana-ruiz:Ana Ruiz" --party "Fleetwise=marcus-okafor,priya-shah:Marcus Okafor,Priya Shah" > /dev/null
+node "$CLI" init --party "Northlight Studio=ana-ruiz:Ana Ruiz:northlight-drafter" --party "Fleetwise=marcus-okafor,priya-shah:Marcus Okafor,Priya Shah:fleetwise-counsel" > /dev/null
 commit ana "2026-10-13T09:00:00Z" "chore: set up parley
 
 Parley-Author: Ana Ruiz"
@@ -57,6 +58,17 @@ for v in 1 2 3 4 5 6 7; do
   fi
   cp "$HERE/versions/v$v.md" agreements/design-services.md
   commit "${who[$v]}" "${dates[$v]}" "$HERE/versions/v$v.msg"
+  # The other side reads the round and approves every change that cites what was said. The
+  # four planted terms have no valid source, so they are not on the list and stay synthetic.
+  cleared="$( (node "$CLI" audit --repo . --base HEAD~1 --head HEAD --json || true) | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);process.stdout.write(r.findings.filter(f=>f.status==="needs-person").map(f=>f.clause+" #"+f.hash).join(", "))})')"
+  if [ -n "$cleared" ]; then
+    case "${who[$v]}" in fleet) reviewer=ana ;; north) reviewer=marcus ;; *) reviewer="" ;; esac
+    if [ -n "$reviewer" ]; then
+      commit "$reviewer" "${dates[$v]}" "review: round $((v - 1)) checked against the call
+
+Parley-Approved: $cleared"
+    fi
+  fi
 done
 if [ "$WITH_VERIFY" = 1 ]; then
   mkdir -p .parley

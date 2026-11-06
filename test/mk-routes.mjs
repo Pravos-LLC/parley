@@ -1,8 +1,10 @@
 // Writes routes.json for test/mock-github.mjs from a list of PR comments.
-//   node test/mk-routes.mjs <out.json> '<json array of {id, login, body, created, updated?, pr?}>'
+//   node test/mk-routes.mjs <out.json> '<json array of {id, login, body, created, updated?, pr?}>' [verdict]
+// With a verdict (supported|partial|contradicted|unsupported), it also answers the OpenRouter
+// chat completion that parley verify sends.
 import { writeFileSync } from 'node:fs';
 
-const [out, spec] = process.argv.slice(2);
+const [out, spec, verdict] = process.argv.slice(2);
 const list = JSON.parse(spec || '[]');
 const REPO = 'acme/deal';
 const comments = list.map((c) => ({
@@ -20,4 +22,10 @@ const routes = {
   [`/repos/${REPO}/pulls/7`]: { number: 7, body: '', user: { login: 'ana-ruiz' }, base: { ref: 'main' }, head: { sha: '0' } },
 };
 for (const c of comments) routes[`/repos/${REPO}/issues/comments/${c.id}`] = c;
+if (verdict) {
+  routes['/openrouter/chat/completions'] = {
+    choices: [{ message: { content: JSON.stringify({ verdict, utterance_ids: ['u001'], quote: 'mock', confidence: 0.9 }) } }],
+    usage: { cost: 0 },
+  };
+}
 writeFileSync(out, JSON.stringify(routes, null, 2));
