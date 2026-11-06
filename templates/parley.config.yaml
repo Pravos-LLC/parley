@@ -1,0 +1,53 @@
+# parley configuration. CI reads this file from the base branch, so a pull request
+# cannot change who the parties are or what counts as material in the same breath.
+version: 1
+
+# Who is negotiating. Each party lists the GitHub logins that speak for it and the
+# people who may ask for, write or approve changes on its behalf. A person can carry their
+# own login, so their instructions must come from it:  people: [{ name: Ana Ruiz, login: ana-ruiz }]
+parties:
+{{PARTIES}}
+
+# Clauses that mention these terms cannot merge while "Discussed live:" says "Not yet".
+material_terms:
+  - liability
+  - indemnity
+  - insurance
+  - intellectual property
+  - payment
+  - exclusivity
+  - non-circumvention
+  - data protection
+  - termination
+
+paths:
+  agreements: agreements
+  records: records
+  issues: agreements/issues
+
+provenance:
+  # Every changed clause says who wrote it, and every agent-written change cites
+  # what a person said. Set to false only to adopt parley gradually.
+  required: true
+  # A citation says where an agent change comes from; it does not prove it. Each
+  # agent-written change is cleared by parley verify (supported or partial, run in
+  # CI when OPENROUTER_API_KEY is set) or by the other party's approval comment.
+  # This is the only supported value.
+  agent_sources: verify-or-approve
+
+front_matter:
+  # Values the "status" key may take without a row in the change table.
+  status: [draft, proposed, agreed, signed, adopted]
+  # Setting one of these needs every party to comment on the PR:
+  #   approve status <file name> <status> #<first 12 characters of the head commit>
+  terminal_status: [signed]
+
+# Base branches whose pull requests get a "parley/<branch>" commit status. Empty means the
+# repository's default branch. CI reads this list from the default branch only. Require the
+# "parley/<branch>" status (source: GitHub Actions) in that branch's protection rules.
+protected_branches: []
+
+verify:
+  # Open-weight model on OpenRouter used by `parley verify`. See docs/models.md in
+  # the parley repository for the trial behind this default.
+  model: {{MODEL}}

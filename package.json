@@ -1,0 +1,58 @@
+{
+  "name": "@pravos/parley",
+  "version": "0.1.0",
+  "description": "A negotiation ledger for the agent era. The meeting is the record, and every clause shows whether a person or an agent wrote it.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "parley": "dist/cli.mjs"
+  },
+  "files": [
+    "dist",
+    "templates",
+    "README.md",
+    "NOTICE",
+    "LICENSE",
+    "CHANGELOG.md"
+  ],
+  "engines": {
+    "node": ">=22"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Pravos-LLC/parley.git"
+  },
+  "keywords": [
+    "negotiation",
+    "agreements",
+    "contracts",
+    "provenance",
+    "ai-agents",
+    "redline",
+    "transcripts"
+  ],
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "prepare": "node scripts/build.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "node scripts/lint.mjs",
+    "test": "node scripts/build.mjs && node --test test/*.test.mjs && bash test/check-regression.sh",
+    "leak-gate": "node scripts/leak-gate.mjs",
+    "demo": "node scripts/build.mjs && bash examples/two-founders/build.sh /tmp/parley-two-founders && node dist/cli.mjs ui --repo /tmp/parley-two-founders"
+  },
+  "devDependencies": {
+    "@fontsource-variable/bricolage-grotesque": "^5.3.0",
+    "@fontsource/hanken-grotesk": "^5.3.0",
+    "@fontsource/jetbrains-mono": "^5.3.0",
+    "@types/node": "^26.6.6",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.2.1",
+    "esbuild": "^0.28.2",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6",
+    "yaml": "^2.9.1"
+  }
+}

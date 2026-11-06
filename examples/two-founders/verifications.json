@@ -1,0 +1,865 @@
+{
+  "entries": [
+    {
+      "file": "agreements/design-services.md",
+      "clause": "1.1",
+      "hash": "13c65bd4cb44",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u004",
+        "u022",
+        "u024",
+        "u025"
+      ],
+      "quote": "Then let's add it. Four flows.",
+      "confidence": 0.95,
+      "latency_ms": 879,
+      "cost_usd": 0.0002249,
+      "run_at": "2026-11-06T01:42:29.471Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "1.3",
+      "hash": "f544b8e3646c",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u023"
+      ],
+      "quote": "If it's one screen and a couple of states, we can fold it in without changing the fee or the timeline.",
+      "confidence": 0.95,
+      "latency_ms": 613,
+      "cost_usd": 0.00015287,
+      "run_at": "2026-11-06T01:42:30.085Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "2.2",
+      "hash": "f794d7a23c93",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u007",
+        "u008",
+        "u009",
+        "u010"
+      ],
+      "quote": "They pay everything on net thirty. Could the second half be thirty days after handover?",
+      "confidence": 0.95,
+      "latency_ms": 750,
+      "cost_usd": 0.000055849,
+      "run_at": "2026-11-06T01:42:30.835Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "3.1",
+      "hash": "56b0887a5f9a",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "contradicted",
+      "utterance_ids": [
+        "u011",
+        "u012",
+        "u013"
+      ],
+      "quote": "Once you've paid in full, the final designs are yours.",
+      "confidence": 0.95,
+      "latency_ms": 622,
+      "cost_usd": 0.0002403,
+      "run_at": "2026-11-06T01:42:31.457Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "3.3",
+      "hash": "590dc77cbc82",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u014",
+        "u015",
+        "u016"
+      ],
+      "quote": "Once it's live, sure. Not before launch.",
+      "confidence": 0.97,
+      "latency_ms": 702,
+      "cost_usd": 0.000049575,
+      "run_at": "2026-11-06T01:42:32.159Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "4.1",
+      "hash": "72e9a6de87ba",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u025",
+        "u026"
+      ],
+      "quote": "Priya, will you be our day-to-day contact?",
+      "confidence": 0.9,
+      "latency_ms": 649,
+      "cost_usd": 0.000130936,
+      "run_at": "2026-11-06T01:42:32.810Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "4.2",
+      "hash": "3d817934680f",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u027"
+      ],
+      "quote": "And I'll send a progress update every Friday.",
+      "confidence": 0.85,
+      "latency_ms": 756,
+      "cost_usd": 0.000083712,
+      "run_at": "2026-11-06T01:42:33.567Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "4.3",
+      "hash": "875394dafe0c",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "contradicted",
+      "utterance_ids": [
+        "u017",
+        "u018",
+        "u019"
+      ],
+      "quote": "That's fine with us. We're not asking for exclusivity. We just don't want our stuff shared.",
+      "confidence": 0.95,
+      "latency_ms": 672,
+      "cost_usd": 0.000051994,
+      "run_at": "2026-11-06T01:42:34.239Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "5.1",
+      "hash": "87bcc4f7e5e5",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u020",
+        "u021"
+      ],
+      "quote": "Both ways, and keep it simple. One paragraph.",
+      "confidence": 0.6,
+      "latency_ms": 818,
+      "cost_usd": 0.0000605,
+      "run_at": "2026-11-06T01:42:35.058Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "6.1",
+      "hash": "8a3f2f49e82c",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "contradicted",
+      "utterance_ids": [
+        "u029",
+        "u030"
+      ],
+      "quote": "Either of us can end it with two weeks' notice, and you pay for the work done up to that point.",
+      "confidence": 0.95,
+      "latency_ms": 653,
+      "cost_usd": 0.000065465,
+      "run_at": "2026-11-06T01:42:35.711Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "6.3",
+      "hash": "d0afa95ae8ad",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "contradicted",
+      "utterance_ids": [
+        "u034",
+        "u035"
+      ],
+      "quote": "No auto-renewal, please.",
+      "confidence": 0.98,
+      "latency_ms": 608,
+      "cost_usd": 0.0002316,
+      "run_at": "2026-11-06T01:42:36.320Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "7.1",
+      "hash": "9a83402cf2ba",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u033"
+      ],
+      "quote": "Capped at the fees paid, and nobody's on the hook for indirect losses.",
+      "confidence": 0.95,
+      "latency_ms": 701,
+      "cost_usd": 0.000095516,
+      "run_at": "2026-11-06T01:42:37.022Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "7.2",
+      "hash": "b93021db817a",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "contradicted",
+      "utterance_ids": [
+        "u032",
+        "u033"
+      ],
+      "quote": "I'd say cap it at the fee. That's standard.",
+      "confidence": 0.95,
+      "latency_ms": 1387,
+      "cost_usd": 0.000103602,
+      "run_at": "2026-11-06T01:42:38.409Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "8.1",
+      "hash": "68c76a92045b",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.6,
+      "latency_ms": 1061,
+      "cost_usd": 0.000054075,
+      "run_at": "2026-11-06T01:42:39.471Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "8.2",
+      "hash": "9e9b383a1bea",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.6,
+      "latency_ms": 605,
+      "cost_usd": 0.000139566,
+      "run_at": "2026-11-06T01:42:40.077Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "8.3",
+      "hash": "312a087c06a6",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [],
+      "quote": "",
+      "confidence": 0.85,
+      "latency_ms": 499,
+      "cost_usd": 0.0002262,
+      "run_at": "2026-11-06T01:42:40.576Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "8.4",
+      "hash": "112cc2dd1006",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 939,
+      "cost_usd": 0.00013247,
+      "run_at": "2026-11-06T01:42:41.515Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "9.1",
+      "hash": "ba2a4ae3bd5d",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u035",
+        "u036",
+        "u025",
+        "u026"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.6,
+      "latency_ms": 719,
+      "cost_usd": 0.000106722,
+      "run_at": "2026-11-06T01:42:42.235Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "9.2",
+      "hash": "5cad3a1f7a43",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 579,
+      "cost_usd": 0.0002484,
+      "run_at": "2026-11-06T01:42:42.814Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "9.3",
+      "hash": "a463d4c3c7fb",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 582,
+      "cost_usd": 0.0001929,
+      "run_at": "2026-11-06T01:42:43.396Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "10.1",
+      "hash": "40e396c2b6bd",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.7,
+      "latency_ms": 615,
+      "cost_usd": 0.0002544,
+      "run_at": "2026-11-06T01:42:44.011Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "10.2",
+      "hash": "24929cfba866",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 881,
+      "cost_usd": 0.0002592,
+      "run_at": "2026-11-06T01:42:44.893Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "10.3",
+      "hash": "030b6bb94a44",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.9,
+      "latency_ms": 633,
+      "cost_usd": 0.000140706,
+      "run_at": "2026-11-06T01:42:45.527Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "11.1",
+      "hash": "f595a302eec3",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.9,
+      "latency_ms": 709,
+      "cost_usd": 0.000135386,
+      "run_at": "2026-11-06T01:42:46.237Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "11.2",
+      "hash": "48c6a6636e9a",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.9,
+      "latency_ms": 614,
+      "cost_usd": 0.0001804,
+      "run_at": "2026-11-06T01:42:46.852Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "11.3",
+      "hash": "9a7fc7104857",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "contradicted",
+      "utterance_ids": [
+        "u029",
+        "u030"
+      ],
+      "quote": "Either of us can end it with two weeks' notice, and you pay for the work done up to that point.",
+      "confidence": 0.95,
+      "latency_ms": 1309,
+      "cost_usd": 0.00020115,
+      "run_at": "2026-11-06T01:42:48.162Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "12.1",
+      "hash": "3957874b9206",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate is fine with you?",
+      "confidence": 0.85,
+      "latency_ms": 581,
+      "cost_usd": 0.0002577,
+      "run_at": "2026-11-06T01:42:48.744Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "12.2",
+      "hash": "f382e08760a4",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [],
+      "quote": "",
+      "confidence": 0.9,
+      "latency_ms": 637,
+      "cost_usd": 0.0002715,
+      "run_at": "2026-11-06T01:42:49.382Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "12.3",
+      "hash": "234cb2240ce8",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.9,
+      "latency_ms": 680,
+      "cost_usd": 0.000103546,
+      "run_at": "2026-11-06T01:42:50.062Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "13.1",
+      "hash": "f535c3e4ea82",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate is fine with you?",
+      "confidence": 0.85,
+      "latency_ms": 603,
+      "cost_usd": 0.000252,
+      "run_at": "2026-11-06T01:42:50.665Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "13.2",
+      "hash": "dd690978c554",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.3,
+      "latency_ms": 705,
+      "cost_usd": 0.000063219,
+      "run_at": "2026-11-06T01:42:51.371Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "13.3",
+      "hash": "d6ec4f7261ef",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.75,
+      "latency_ms": 777,
+      "cost_usd": 0.00011388,
+      "run_at": "2026-11-06T01:42:52.148Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "14.1",
+      "hash": "17cc04b5ecc0",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 482,
+      "cost_usd": 0.0002547,
+      "run_at": "2026-11-06T01:42:52.631Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "14.2",
+      "hash": "aa188f0952a6",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 1073,
+      "cost_usd": 0.000264,
+      "run_at": "2026-11-06T01:42:53.704Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "15.1",
+      "hash": "68921792b274",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u035",
+        "u036",
+        "u025",
+        "u026"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.6,
+      "latency_ms": 1063,
+      "cost_usd": 0.00019935,
+      "run_at": "2026-11-06T01:42:54.767Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "15.2",
+      "hash": "d6a39d14b870",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.9,
+      "latency_ms": 656,
+      "cost_usd": 0.000056649,
+      "run_at": "2026-11-06T01:42:55.423Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "15.3",
+      "hash": "7af4f4c97b63",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [],
+      "quote": "",
+      "confidence": 1,
+      "latency_ms": 2349,
+      "cost_usd": 0.000018998,
+      "run_at": "2026-11-06T01:42:57.772Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "16.1",
+      "hash": "07374c98fd32",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 670,
+      "cost_usd": 0.000118066,
+      "run_at": "2026-11-06T01:42:58.442Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "16.2",
+      "hash": "ac6e2acb5d4d",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate is fine with you?",
+      "confidence": 0.85,
+      "latency_ms": 605,
+      "cost_usd": 0.000043619,
+      "run_at": "2026-11-06T01:42:59.047Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "16.3",
+      "hash": "301c96c430eb",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 629,
+      "cost_usd": 0.000042024,
+      "run_at": "2026-11-06T01:42:59.676Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "16.4",
+      "hash": "5ff6c442d3c3",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [],
+      "quote": "",
+      "confidence": 1,
+      "latency_ms": 803,
+      "cost_usd": 0.000018038,
+      "run_at": "2026-11-06T01:43:00.480Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "16.5",
+      "hash": "657a4446d435",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.6,
+      "latency_ms": 691,
+      "cost_usd": 0.000042709,
+      "run_at": "2026-11-06T01:43:01.171Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "16.6",
+      "hash": "e8121f0360ba",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "partial",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.6,
+      "latency_ms": 824,
+      "cost_usd": 0.000038389,
+      "run_at": "2026-11-06T01:43:01.996Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "16.7",
+      "hash": "1d66408ed163",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.72,
+      "latency_ms": 1039,
+      "cost_usd": 0.000033874,
+      "run_at": "2026-11-06T01:43:03.035Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "16.8",
+      "hash": "8a81a9f9af9d",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [
+        "u031",
+        "u032",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 1149,
+      "cost_usd": 0.00011947,
+      "run_at": "2026-11-06T01:43:04.184Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "16.9",
+      "hash": "ac9abe38b3ba",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 796,
+      "cost_usd": 0.000083136,
+      "run_at": "2026-11-06T01:43:04.981Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "17.1",
+      "hash": "2a65788e5b1f",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate is fine with you?",
+      "confidence": 0.85,
+      "latency_ms": 656,
+      "cost_usd": 0.000033709,
+      "run_at": "2026-11-06T01:43:05.637Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "17.2",
+      "hash": "52c408f42c42",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 1207,
+      "cost_usd": 0.000070192,
+      "run_at": "2026-11-06T01:43:06.844Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "17.3",
+      "hash": "1e126a13aebf",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 1007,
+      "cost_usd": 0.00010855,
+      "run_at": "2026-11-06T01:43:07.851Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "17.4",
+      "hash": "e51ef7b8dce5",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "unsupported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 943,
+      "cost_usd": 0.0001127,
+      "run_at": "2026-11-06T01:43:08.794Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "17.5",
+      "hash": "b63d55e65a47",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.75,
+      "latency_ms": 870,
+      "cost_usd": 0.00012532,
+      "run_at": "2026-11-06T01:43:09.664Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "18.1",
+      "hash": "9f54a2693524",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 619,
+      "cost_usd": 0.000133486,
+      "run_at": "2026-11-06T01:43:10.283Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "18.2",
+      "hash": "d8773c4f2f2d",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate is fine with you?",
+      "confidence": 0.85,
+      "latency_ms": 597,
+      "cost_usd": 0.000118676,
+      "run_at": "2026-11-06T01:43:10.880Z"
+    },
+    {
+      "file": "agreements/design-services.md",
+      "clause": "18.3",
+      "hash": "6f56dcd15dc8",
+      "model": "deepseek/deepseek-v4.1-flash",
+      "verdict": "supported",
+      "utterance_ids": [
+        "u035",
+        "u036"
+      ],
+      "quote": "Standard boilerplate, nothing exotic. Governing law, notices, the usual.",
+      "confidence": 0.85,
+      "latency_ms": 1040,
+      "cost_usd": 0.000049224,
+      "run_at": "2026-11-06T01:43:11.921Z"
+    }
+  ]
+}

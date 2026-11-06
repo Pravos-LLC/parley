@@ -1,0 +1,250 @@
+{
+  "run_at": "2026-11-06T01:51:02.007Z",
+  "fixture": "examples/two-founders",
+  "calls_per_model": 54,
+  "planted": [
+    "3.1",
+    "4.3",
+    "6.1",
+    "6.3",
+    "7.2"
+  ],
+  "core_supported": [
+    "1.1",
+    "1.3",
+    "2.2",
+    "3.3",
+    "4.1",
+    "4.2",
+    "5.1",
+    "7.1"
+  ],
+  "results": {
+    "deepseek/deepseek-v4.1-flash": {
+      "calls": 54,
+      "planted_contradicted": [
+        "3.1",
+        "4.3",
+        "6.1",
+        "6.3",
+        "7.2"
+      ],
+      "planted_verdicts": {
+        "3.1": "contradicted",
+        "4.3": "contradicted",
+        "6.1": "contradicted",
+        "6.3": "contradicted",
+        "7.2": "contradicted"
+      },
+      "core_contradicted": [],
+      "core_unsupported": [],
+      "boilerplate_total": 41,
+      "boilerplate_contradicted": [
+        "11.3"
+      ],
+      "boilerplate_unsupported": [
+        "8.3",
+        "8.4",
+        "9.2",
+        "10.2",
+        "12.2",
+        "12.3",
+        "13.2",
+        "14.1",
+        "14.2",
+        "15.3",
+        "16.4",
+        "16.8",
+        "17.4"
+      ],
+      "cost_usd": 0.00697,
+      "median_latency_ms": 702,
+      "quotes": {
+        "3.1": "Once you've paid in full, the final designs are yours.",
+        "4.3": "That's fine with us. We're not asking for exclusivity. We just don't want our stuff shared.",
+        "6.1": "Either of us can end it with two weeks' notice, and you pay for the work done up to that point.",
+        "6.3": "No auto-renewal, please.",
+        "7.2": "I'd say cap it at the fee. That's standard."
+      }
+    },
+    "qwen/qwen3.8-flash": {
+      "calls": 54,
+      "planted_contradicted": [
+        "3.1",
+        "4.3",
+        "6.1",
+        "6.3",
+        "7.2"
+      ],
+      "planted_verdicts": {
+        "3.1": "contradicted",
+        "4.3": "contradicted",
+        "6.1": "contradicted",
+        "6.3": "contradicted",
+        "7.2": "contradicted"
+      },
+      "core_contradicted": [],
+      "core_unsupported": [],
+      "boilerplate_total": 41,
+      "boilerplate_contradicted": [
+        "11.3"
+      ],
+      "boilerplate_unsupported": [
+        "8.3",
+        "10.2",
+        "10.3",
+        "11.2",
+        "12.2",
+        "12.3",
+        "14.1",
+        "15.2",
+        "15.3",
+        "16.5",
+        "16.8",
+        "17.4",
+        "17.5"
+      ],
+      "cost_usd": 0.00361,
+      "median_latency_ms": 1210,
+      "quotes": {
+        "3.1": "Once you've paid in full, the final designs are yours. We just keep our own tools, templates and component library, because we use those for everyone.",
+        "4.3": "We're not asking for exclusivity.",
+        "6.1": "Either of us can end it with two weeks' notice, and you pay for the work done up to that point.",
+        "6.3": "No auto-renewal, please.",
+        "7.2": "I'd say cap it at the fee. That's standard."
+      }
+    },
+    "z-ai/glm-5.3-flash": {
+      "calls": 54,
+      "planted_contradicted": [
+        "3.1",
+        "4.3",
+        "6.1",
+        "6.3",
+        "7.2"
+      ],
+      "planted_verdicts": {
+        "3.1": "contradicted",
+        "4.3": "contradicted",
+        "6.1": "contradicted",
+        "6.3": "contradicted",
+        "7.2": "contradicted"
+      },
+      "core_contradicted": [],
+      "core_unsupported": [],
+      "boilerplate_total": 41,
+      "boilerplate_contradicted": [],
+      "boilerplate_unsupported": [
+        "8.1",
+        "10.2",
+        "10.3",
+        "11.2",
+        "12.2",
+        "12.3",
+        "13.2",
+        "14.1",
+        "15.1",
+        "15.2",
+        "15.3",
+        "16.4",
+        "16.7",
+        "16.9",
+        "17.4",
+        "18.2"
+      ],
+      "cost_usd": 0.006,
+      "median_latency_ms": 2061,
+      "quotes": {
+        "3.1": "Once you've paid in full, the final designs are yours. We just keep our own tools, templates and component library, because we use those for everyone.",
+        "4.3": "That's fine with us. We're not asking for exclusivity. We just don't want our stuff shared.",
+        "6.1": "Either of us can end it with two weeks' notice, and you pay for the work done up to that point.",
+        "6.3": "And after the eight weeks, if we want more, we'll just do a new statement of work. No auto-renewal, please.",
+        "7.2": "Ana Ruiz: Capped at the fees paid, and nobody's on the hook for indirect losses."
+      }
+    },
+    "moonshotai/kimi-k3.1-pro": {
+      "calls": 54,
+      "planted_contradicted": [
+        "3.1",
+        "4.3",
+        "6.1",
+        "6.3",
+        "7.2"
+      ],
+      "planted_verdicts": {
+        "3.1": "contradicted",
+        "4.3": "contradicted",
+        "6.1": "contradicted",
+        "6.3": "contradicted",
+        "7.2": "contradicted"
+      },
+      "core_contradicted": [],
+      "core_unsupported": [],
+      "boilerplate_total": 41,
+      "boilerplate_contradicted": [
+        "11.3"
+      ],
+      "boilerplate_unsupported": [
+        "8.1",
+        "8.3",
+        "10.2",
+        "10.3",
+        "12.3",
+        "13.2",
+        "14.1",
+        "15.1",
+        "15.2"
+      ],
+      "cost_usd": 0.11078,
+      "median_latency_ms": 1038,
+      "quotes": {
+        "3.1": "Of course. Once you've paid in full, the final designs are yours. We just keep our own tools, templates and component library, because we use those for everyone.",
+        "4.3": "That's fine with us. We're not asking for exclusivity. We just don't want our stuff shared.",
+        "6.1": "Either of us can end it with two weeks' notice, and you pay for the work done up to that point.",
+        "6.3": "Good. And after the eight weeks, if we want more, we'll just do a new statement of work. No auto-renewal, please.",
+        "7.2": "Capped at the fees paid, and nobody's on the hook for indirect losses."
+      }
+    },
+    "ibm-granite/granite-4.2-8b": {
+      "calls": 54,
+      "planted_contradicted": [
+        "6.3"
+      ],
+      "planted_verdicts": {
+        "3.1": "partial",
+        "4.3": "unsupported",
+        "6.1": "partial",
+        "6.3": "contradicted",
+        "7.2": "partial"
+      },
+      "core_contradicted": [],
+      "core_unsupported": [],
+      "boilerplate_total": 41,
+      "boilerplate_contradicted": [
+        "10.3"
+      ],
+      "boilerplate_unsupported": [
+        "8.1",
+        "8.4",
+        "9.2",
+        "11.1",
+        "12.3",
+        "13.2",
+        "14.1",
+        "16.3",
+        "16.8",
+        "17.2",
+        "17.5"
+      ],
+      "cost_usd": 0.00209,
+      "median_latency_ms": 714,
+      "quotes": {
+        "3.1": "Once you've paid in full, the final designs are yours.",
+        "4.3": "",
+        "6.1": "Either of us can end it with two weeks' notice, and you pay for the work done up to that point.",
+        "6.3": "No auto-renewal, please.",
+        "7.2": "Capped at the fees paid, and nobody's on the hook for indirect losses."
+      }
+    }
+  }
+}
