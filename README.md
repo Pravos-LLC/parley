@@ -82,7 +82,7 @@ In CI, an instruction comment that cannot be fetched and checked fails.
 
 ## Approvals
 
-Approvals are comments on the pull request, so the person approving writes them in their own words and under their own login. In CI parley reads the PR's comments through the GitHub API. The workflow posts the result as a commit status named **`parley/<base branch>`** (for example `parley/main`) on the PR's head commit. It does this when the PR changes, and whenever a party writes, edits or deletes a comment. An approval therefore turns the PR green, and deleting or editing an approval turns it red again.
+Approvals are comments on the pull request, so the person approving writes them in their own words and under their own login. In CI parley reads the PR's comments through the GitHub API. The workflow posts the result as a commit status named **`parley/<base branch>`** (for example `parley/main`) on the PR's head commit. It does this when the PR changes, and whenever a party writes, edits or deletes a comment. An approval therefore turns the PR green, and deleting or editing an approval triggers a new run that turns it red again. Runs for one pull request are queued one at a time, so an earlier run cannot post its result after a later one.
 
 The status is posted only when the PR's base is a protected parley branch: `protected_branches` in the default branch's `parley.config.yaml`, or the default branch itself if that list is empty. A PR into any other branch gets no parley status at all, never a success. So a second PR with the same head against an unprotected branch cannot turn the first one green. Comments from logins that are not parties are skipped without running the check.
 

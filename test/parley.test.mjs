@@ -381,3 +381,8 @@ test('R-L3: no test made a network call, and the guard really blocks one', () =>
   assert.equal(r.status, 0);
   assert.match(readFileSync(NET_LOG, 'utf8'), /openrouter\.ai/);
 });
+
+test('R4-M1: the parley workflow queues runs per pull request, so a late run cannot overwrite a later result', () => {
+  const wf = readFileSync(join(ROOT, 'templates/github/workflows/parley.yml'), 'utf8');
+  assert.match(wf, /^concurrency:\n\s+group: parley-\$\{\{ github\.event\.pull_request\.number \|\| github\.event\.issue\.number \}\}\n\s+cancel-in-progress: false/m);
+});

@@ -27,6 +27,12 @@ permissions:
   pull-requests: read
   statuses: write
 
+# One run per pull request at a time, in order: a slow earlier run can never post its result
+# after a later run (for example the one triggered by deleting an approval).
+concurrency:
+  group: parley-${{ github.event.pull_request.number || github.event.issue.number }}
+  cancel-in-progress: false
+
 jobs:
   disclose-every-change:
     if: github.event_name == 'pull_request_target' || github.event.issue.pull_request
