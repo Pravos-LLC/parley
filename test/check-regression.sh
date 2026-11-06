@@ -661,7 +661,7 @@ gate_case "R3-L2: a comment from a party login is evaluated" "party=true" --conf
 gate_case "R3-L2: a comment from a non-party login is skipped" "party=false" --config-ref zz-prov --default-branch main --base main --commenter drive-by-user
 WF="$ROOT/templates/github/workflows/parley.yml"
 if grep -q 'context="parley/$BASE_REF"' "$WF" && grep -q 'result=none' "$WF" && ! grep -q 'Nothing to check."' "$WF" \
-  && grep -q "steps.gate.outputs.post == 'true'" "$WF" && grep -q 'origin/$DEFAULT_BRANCH:.parley/parley.mjs' "$WF"; then
+  && grep -q "if: needs.gate.outputs.post == 'true'" "$WF" && grep -q 'origin/$DEFAULT_BRANCH:.parley/parley.mjs' "$WF"; then
   PASS=$((PASS + 1)); echo "ok   R3-H1: the workflow names the status parley/<base>, gates on the default branch's config, and never posts success for a base without setup"
 else FAILS=$((FAILS + 1)); echo "FAIL R3-H1: workflow status gating"; fi
 if grep -q 'types: \[created, edited, deleted\]' "$WF"; then PASS=$((PASS + 1)); echo "ok   R3-L2: edited and deleted comments re-run the check, so a success can be revoked"; else FAILS=$((FAILS + 1)); echo "FAIL R3-L2: comment edit/delete triggers"; fi
