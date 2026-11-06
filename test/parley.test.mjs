@@ -382,7 +382,14 @@ test('R-L3: no test made a network call, and the guard really blocks one', () =>
   assert.match(readFileSync(NET_LOG, 'utf8'), /openrouter\.ai/);
 });
 
-test('R4-M1: the parley workflow queues runs per pull request, so a late run cannot overwrite a later result', () => {
+test('R4-M1/R5-M1: checks queue per pull request in order, and comments from non-parties never enter the queue', () => {
   const wf = readFileSync(join(ROOT, 'templates/github/workflows/parley.yml'), 'utf8');
-  assert.match(wf, /^concurrency:\n\s+group: parley-\$\{\{ github\.event\.pull_request\.number \|\| github\.event\.issue\.number \}\}\n\s+cancel-in-progress: false/m);
+  // The queue lives on the checking job only, so non-party comments (skipped by the gate job) never enter it,
+  // and queue: max keeps a waiting run (for example one revoking an approval) from being replaced.
+  const job = wf.slice(wf.indexOf('  disclose-every-change:'));
+  assert.match(job, /needs: gate\n\s+if: needs\.gate\.outputs\.post == 'true'/);
+  assert.match(job, /concurrency:\n\s+group: parley-\$\{\{ github\.event\.pull_request\.number \|\| github\.event\.issue\.number \}\}\n\s+cancel-in-progress: false\n\s+queue: max/);
+  assert.doesNotMatch(wf.slice(0, wf.indexOf('jobs:')), /concurrency:/, 'no workflow-level group that skipped runs would join');
+  const gate = wf.slice(wf.indexOf('  gate:'), wf.indexOf('  disclose-every-change:'));
+  assert.doesNotMatch(gate, /concurrency:/);
 });

@@ -9,7 +9,8 @@ name: parley
 # The result is a commit status named "parley/<base branch>" on the PR's head commit. It is
 # posted only when the base is a protected parley branch (protected_branches in the default
 # branch's parley.config.yaml, or the default branch if that list is empty). Any other base gets
-# no status at all, never a success. Require "parley/<your default branch>" in branch protection,
+# no status at all, never a success. A gate job decides this first; only events that may post a
+# status join the per-PR queue on the checking job. Require "parley/<your default branch>" in branch protection,
 # with GitHub Actions as its expected source.
 #
 # The token can read the repo and write commit statuses. Anyone with write access to the repo can
@@ -27,16 +28,17 @@ permissions:
   pull-requests: read
   statuses: write
 
-# One run per pull request at a time, in order: a slow earlier run can never post its result
-# after a later run (for example the one triggered by deleting an approval).
-concurrency:
-  group: parley-${{ github.event.pull_request.number || github.event.issue.number }}
-  cancel-in-progress: false
-
 jobs:
-  disclose-every-change:
+  # Decides whether this event may post a status at all. It runs outside the queue below, so a
+  # comment from a login that is not a party never enters it and can never delay or cancel the
+  # run that matters.
+  gate:
     if: github.event_name == 'pull_request_target' || github.event.issue.pull_request
     runs-on: ubuntu-latest
+    outputs:
+      post: ${{ steps.gate.outputs.post }}
+      base: ${{ steps.pr.outputs.base }}
+      head: ${{ steps.pr.outputs.head }}
     steps:
       - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
         with:
@@ -45,7 +47,8 @@ jobs:
       - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: '22'
-      - name: Fetch the default branch, the PR base and the PR head (as data)
+      - name: Read the PR base and head, and fetch the default branch
+        id: pr
         env:
           GH_TOKEN: ${{ github.token }}
           PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
@@ -58,20 +61,16 @@ jobs:
             case "$v" in *[!A-Za-z0-9._/-]*|"") echo "::error::unexpected branch name"; exit 1 ;; esac
           done
           case "$head" in *[!0-9a-f]*|"") echo "::error::unexpected head sha"; exit 1 ;; esac
-          {
-            echo "BASE_REF=$base"
-            echo "HEAD_SHA=$head"
-            echo "PR_NUMBER=$PR_NUMBER"
-            echo "DEFAULT_BRANCH=$DEFAULT_BRANCH"
-          } >> "$GITHUB_ENV"
+          { echo "base=$base"; echo "head=$head"; } >> "$GITHUB_OUTPUT"
           auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
           git -c "http.https://github.com/.extraheader=$auth" fetch --no-tags origin \
-            "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH" \
-            "+refs/heads/$base:refs/remotes/origin/$base" "+refs/pull/$PR_NUMBER/head:refs/parley/head"
+            "+refs/heads/$DEFAULT_BRANCH:refs/remotes/origin/$DEFAULT_BRANCH"
       - name: May this event post a status?
         id: gate
         env:
           COMMENTER: ${{ github.event.comment.user.login }}
+          DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+          BASE_REF: ${{ steps.pr.outputs.base }}
         run: |
           # Decided by the default branch's own checker and config, which this PR cannot change.
           if ! git cat-file -e "origin/$DEFAULT_BRANCH:.parley/parley.mjs" 2>/dev/null; then
@@ -92,9 +91,41 @@ jobs:
             echo "post=false" >> "$GITHUB_OUTPUT"; exit 0
           fi
           echo "post=true" >> "$GITHUB_OUTPUT"
+
+  disclose-every-change:
+    needs: gate
+    if: needs.gate.outputs.post == 'true'
+    runs-on: ubuntu-latest
+    # One check per pull request at a time, first in first out, and a waiting run is never
+    # replaced by a newer one (queue: max). Each run reads the comments when it starts, so the
+    # last status posted reflects the latest approvals, including a deleted one.
+    concurrency:
+      group: parley-${{ github.event.pull_request.number || github.event.issue.number }}
+      cancel-in-progress: false
+      queue: max
+    env:
+      BASE_REF: ${{ needs.gate.outputs.base }}
+      HEAD_SHA: ${{ needs.gate.outputs.head }}
+      PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Fetch the PR base and the PR head (as data)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          case "$BASE_REF" in *[!A-Za-z0-9._/-]*|"") echo "::error::unexpected branch name"; exit 1 ;; esac
+          case "$HEAD_SHA" in *[!0-9a-f]*|"") echo "::error::unexpected head sha"; exit 1 ;; esac
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$auth" fetch --no-tags origin \
+            "+refs/heads/$BASE_REF:refs/remotes/origin/$BASE_REF" "+refs/pull/$PR_NUMBER/head:refs/parley/head"
       - name: Every change disclosed, every agent change traced to what people said
         id: check
-        if: steps.gate.outputs.post == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
           # Optional: lets CI run parley verify on agent-written changes. Without it, every
@@ -120,7 +151,7 @@ jobs:
           set -e
           if [ "$code" = 0 ]; then echo "result=success" >> "$GITHUB_OUTPUT"; else echo "result=failure" >> "$GITHUB_OUTPUT"; fi
       - name: Post the "parley/<base>" status on the PR head
-        if: always() && steps.gate.outputs.post == 'true' && steps.check.outputs.result != 'none'
+        if: always() && steps.check.outputs.result != 'none'
         env:
           GH_TOKEN: ${{ github.token }}
           RESULT: ${{ steps.check.outputs.result || 'error' }}
