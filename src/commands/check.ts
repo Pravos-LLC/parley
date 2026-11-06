@@ -201,6 +201,13 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
   /** Valid comments on this PR from these logins (on this PR, unedited, optionally after the latest push) whose body passes. */
   const commentsFrom = (logins: string[], test: (body: string) => boolean, afterPush: boolean) =>
     comments.filter((c) => !commentProblem(c, { pr: pr!, logins, after: afterPush ? pushedAt : undefined }) && test(c.body));
+  // A login listed for two parties can approve as either: say so loudly.
+  const seen = new Map<string, string>();
+  for (const p of config.parties) for (const l of p.logins) {
+    const k = l.toLowerCase();
+    if (seen.has(k) && seen.get(k) !== p.id) say(`WARNING: GitHub login ${l} is listed for more than one party in parley.config.yaml. A PR it opens counts as the first party's, and its comments count as approvals for the others. Use this only in a test repository.`);
+    seen.set(k, p.id);
+  }
   if (config.provenance.agentSources !== 'verify-or-approve') fail(`parley.config.yaml: provenance.agent_sources must be "verify-or-approve", not "${config.provenance.agentSources}".`);
   const shortHead = headSha.slice(0, 12);
 

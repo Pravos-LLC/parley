@@ -630,6 +630,14 @@ expect "R-L2: the same change with a row for MOU-03 passes" 0
 WF="$ROOT/templates/github/workflows/parley.yml"
 if grep -q 'statuses: write' "$WF" && grep -q 'statuses/\$HEAD_SHA' "$WF" && grep -q 'context=parley' "$WF" && grep -q 'issue_comment' "$WF"; then PASS=$((PASS + 1)); echo "ok   R-M1: both events post the parley status on the PR head"; else FAILS=$((FAILS + 1)); echo "FAIL R-M1: both events post the parley status on the PR head"; fi
 
+# --- Sandbox safety: a login listed for two parties is called out ---
+for_prov; sed -i.bak 's/logins: \[marcus-okafor\]/logins: [marcus-okafor, ana-ruiz]/' parley.config.yaml && rm -f parley.config.yaml.bak; commit "base: shared login"; git branch -q -f zz-shared
+edit_clause ", net of its costs"; commit "human edit"
+BASE=zz-shared
+pbody "" "| 3.1 | a | b | x | Ana | Ana Ruiz | |"; expect "a human change on a base with a shared login still passes" 0
+expect_output "a login listed for two parties is warned about" "WARNING: GitHub login ana-ruiz is listed for more than one party"
+BASE=zz-prov
+
 # --- L2: workflow hardening (template) ---
 WF="$ROOT/templates/github/workflows/parley.yml"
 if grep -q 'persist-credentials: false' "$WF" && ! grep -Eq 'uses: [^@]+@v[0-9]' "$WF" && grep -q 'The checker was removed' "$WF"; then PASS=$((PASS + 1)); echo "ok   L2/M1: workflow pins actions by SHA, keeps no token, fails when the checker is removed"; else FAILS=$((FAILS + 1)); echo "FAIL L2/M1: workflow hardening"; fi
