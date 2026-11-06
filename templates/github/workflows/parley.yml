@@ -1,0 +1,59 @@
+name: parley
+
+# Runs the BASE branch's own checker on every agreement pull request, and again when someone
+# comments (approvals are comments). Under pull_request_target and issue_comment, GitHub runs
+# this workflow file from the base branch, so a pull request cannot edit the check that judges
+# it. The checker itself is read from the PR's base branch tip, and the PR head is fetched only
+# as git data, never checked out or executed. Permissions are read-only, and the token is not
+# left on disk.
+on:
+  pull_request_target:
+    types: [opened, edited, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: read
+  issues: read
+  pull-requests: read
+
+jobs:
+  disclose-every-change:
+    if: github.event_name == 'pull_request_target' || github.event.issue.pull_request
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@08eba0b27e820071cde6df949e0beb9ba4906955 # v4.3.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Fetch the pull request head and its base branch as data
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number || github.event.issue.number }}
+        run: |
+          base="$(gh api "repos/$GITHUB_REPOSITORY/pulls/$PR_NUMBER" --jq .base.ref)"
+          case "$base" in *[!A-Za-z0-9._/-]*|"") echo "::error::unexpected base ref"; exit 1 ;; esac
+          echo "BASE_REF=$base" >> "$GITHUB_ENV"
+          echo "PR_NUMBER=$PR_NUMBER" >> "$GITHUB_ENV"
+          auth="AUTHORIZATION: basic $(printf 'x-access-token:%s' "$GH_TOKEN" | base64 -w0)"
+          git -c "http.https://github.com/.extraheader=$auth" fetch --no-tags origin \
+            "+refs/heads/$base:refs/remotes/origin/$base" "+refs/pull/$PR_NUMBER/head:refs/parley/head"
+      - name: Every change disclosed, every agent change traced to what people said
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+          # Optional: lets CI run parley verify on agent-written changes.
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          if ! git cat-file -e "origin/$BASE_REF:.parley/parley.mjs" 2>/dev/null; then
+            if git cat-file -e "origin/$BASE_REF:parley.config.yaml" 2>/dev/null; then
+              echo "::error::parley.config.yaml is on $BASE_REF but .parley/parley.mjs is not. The checker was removed; restore it."
+              exit 1
+            fi
+            echo "The base branch has no parley setup yet (this is the setup PR). Nothing to check."
+            exit 0
+          fi
+          git show "origin/$BASE_REF:.parley/parley.mjs" > "$RUNNER_TEMP/parley.mjs"
+          node "$RUNNER_TEMP/parley.mjs" check --pr "$PR_NUMBER" --base "origin/$BASE_REF" --head refs/parley/head

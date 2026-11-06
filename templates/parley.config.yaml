@@ -1,0 +1,36 @@
+# parley configuration. CI reads this file from the base branch, so a pull request
+# cannot change who the parties are or what counts as material in the same breath.
+version: 1
+
+# Who is negotiating. Each party lists the GitHub logins that speak for it and the
+# people who may ask for, write or approve changes on its behalf. A person can carry their
+# own login, so their instructions must come from it:  people: [{ name: Ana Ruiz, login: ana-ruiz }]
+parties:
+{{PARTIES}}
+
+# Clauses that mention these terms cannot merge while "Discussed live:" says "Not yet".
+material_terms:
+  - liability
+  - indemnity
+  - insurance
+  - intellectual property
+  - payment
+  - exclusivity
+  - non-circumvention
+  - data protection
+  - termination
+
+paths:
+  agreements: agreements
+  records: records
+  issues: agreements/issues
+
+provenance:
+  # Every changed clause says who wrote it, and every agent-written change cites
+  # what a person said. Set to false only to adopt parley gradually.
+  required: true
+
+verify:
+  # Open-weight model on OpenRouter used by `parley verify`. See docs/models.md in
+  # the parley repository for the trial behind this default.
+  model: {{MODEL}}

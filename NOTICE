@@ -1,0 +1,21 @@
+parley
+Copyright 2026 Pravos LLC (d/b/a Vibrana)
+
+This product is licensed under the Apache License, Version 2.0 (see LICENSE).
+
+It contains no code copied from the projects below. It adopts ideas from them, credited here:
+
+- Proof SDK by Every, Inc. (https://github.com/EveryInc/proof-sdk), MIT License.
+  The provenance model (an origin of human or AI for each span, a basis and sources for AI
+  text, approvals that only humans give and that go stale when the content hash changes; see
+  docs/PROVENANCE-SPEC-v2.md in that repository) and the green-for-human, purple-for-AI
+  authorship convention.
+
+- git-ai (https://github.com/git-ai-project/git-ai), Apache License 2.0.
+  The principle that agents report the lines they wrote, with no detection or guessing.
+
+- Agent Trace (https://agent-trace.dev), the shape of the JSON written by
+  `parley export --agent-trace`.
+
+The built UI bundles these fonts, each under the SIL Open Font License 1.1, through the
+Fontsource packages: Bricolage Grotesque, Hanken Grotesk and JetBrains Mono.
