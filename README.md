@@ -14,14 +14,14 @@ Deals used to go like this: two people talk, agree the shape of it, one of them 
 
 - **Ingests meetings** (`parley ingest`): Zoom or Teams WebVTT, WhisperX JSON, Fireflies JSON or plain `Speaker: text`. Each call becomes `records/<date>-<meeting>.md`, one numbered utterance per line, that nobody edits after it merges.
 - **Tracks provenance per clause.** Every change carries an **Author** (a named person, or `agent:<id>`) and a **Source** (an utterance like `records/2026-10-14-kickoff.md#u012`, or a person's linked instruction). Agents report what they wrote; parley does not guess.
-- **Fails anything a person has not cleared** (`parley check`). A citation tells you where an agent's change comes from. It does not prove the change says what was said. So every agent-written change is cleared in one of three ways: `parley verify` finds it `supported` or `partial`, run in CI on this head; the other party approves its hash in a comment; or the person it quotes posts an `instruct` comment. If none of these happens, the pull request fails. A change with a missing, nonexistent or agent-written source, or one the transcript contradicts, is a **synthetic term**.
+- **Fails anything a person has not cleared** (`parley check`). A citation tells you where an agent's change comes from. It does not prove the change says what was said. So every agent-written change is cleared in one of three ways: `parley verify` finds it `supported`, run in CI on this head; the other party approves its hash in a comment; or the person it quotes confirms its exact text with `instruct <clause> #<hash>: ...`. If none of these happens, the pull request fails. A change with a missing, nonexistent or agent-written source, or one the transcript contradicts, is a **synthetic term**.
 - **Shows you the whole negotiation** (`parley ui`). Every clause has a provenance rail: green, a person wrote it; purple, an agent wrote it and it was cleared; amber, an agent cited what was said but nobody has checked it; red, a synthetic term. The transcript sits beside it, with a chart of how long the draft got and who wrote the words.
-- **Checks meaning** (`parley verify`). An open-weight model reads each agent-written clause against the transcript. In CI, `parley check` runs it itself when the `OPENROUTER_API_KEY` secret is set, and never reads verify results from the pull request.
-  - `supported` or `partial` clears a cited change.
-  - `contradicted` fails it, even with an approval, unless the approval says `approve-contradicted`.
-  - `unsupported` still needs a person.
+- **Filters by meaning** (`parley verify`). An open-weight model reads each agent-written clause against the transcript. In CI, `parley check` runs it itself when the `OPENROUTER_API_KEY` secret is set, and never reads verify results from the pull request. Verify is a filter, not proof. It can do two things: clear a change on a `supported` verdict, or send it to a person.
+  - `supported` clears a cited change. The verdict must quote a line it was actually shown, word for word; otherwise it counts as `unsupported`.
+  - `partial` (adds or changes something material) and `unsupported` need a person.
+  - `contradicted` fails, even with an approval, unless the approval says `approve-contradicted`.
 
-  Without the secret, every agent-written change needs the other party's approval. That is the safe default.
+  The clause and transcript go to the model inside data blocks, and the model is told to ignore any instructions in them. A clause cannot close its block, because angle brackets are replaced. Only the JSON verdict is read. Without the secret, every agent-written change needs the other party's approval, which is the safe default.
 - **Checks every agreement document.** Every markdown file under `agreements/` is checked clause by clause, including term sheets and files in subfolders. Issues lists and call sheets follow their own rules. READMEs and templates are skipped.
 - **Keeps the negotiation rules in the repo.** `parley init` scaffolds the rules agents follow, a PR template with a change table, term sheets, an issues list with one written round each before a call, and a CI workflow.
 
@@ -73,22 +73,33 @@ To approve, a person of another party comments on this pull request, after the l
 ```
 
 A Source can also be an instruction from a person, in one of two forms:
-- `instruction by Marcus Okafor, https://github.com/<org>/<repo>/pull/7#issuecomment-123`. The link is to Marcus's own comment on this pull request, written from his login and never edited, with a line of the form `instruct 4.1: <what he wants>`. This clears the change, because Marcus asked for it in writing.
+- `instruction by Marcus Okafor, https://github.com/<org>/<repo>/pull/7#issuecomment-123`. The link is to Marcus's own comment on this pull request, written from his login and never edited.
+  - `instruct 4.1: <what he wants>` is a source, like an utterance. The change still needs `parley verify` to agree, or the other party's approval.
+  - `instruct 4.1 #<current hash of 4.1>: <what he wants>`, posted after the latest push, is Marcus confirming this exact text, so it clears the change. The check prints the hash.
 - `instruction by Marcus Okafor, records/2026-10-14-kickoff.md#u031`. This is an utterance Marcus spoke, in a record already merged. It is treated like any citation: it needs `parley verify` to agree, or the other party's approval. parley does no keyword matching, because a refusal ("I reject 4.1") reads much like a request.
 
 In CI, an instruction comment that cannot be fetched and checked fails.
 
 ## Approvals
 
-Approvals are comments on the pull request, so the person approving writes them in their own words and under their own login. In CI parley reads the PR's comments through the GitHub API. The workflow posts the result as a commit status named **`parley`** on the PR's head commit, both when the PR changes and whenever someone comments. An approval therefore turns the PR green. **Make `parley` the required status check in branch protection.** Require the status, not the job name, and turn on "require branches to be up to date".
+Approvals are comments on the pull request, so the person approving writes them in their own words and under their own login. In CI parley reads the PR's comments through the GitHub API. The workflow posts the result as a commit status named **`parley/<base branch>`** (for example `parley/main`) on the PR's head commit. It does this when the PR changes, and whenever a party writes, edits or deletes a comment. An approval therefore turns the PR green, and deleting or editing an approval turns it red again.
+
+The status is posted only when the PR's base is a protected parley branch: `protected_branches` in the default branch's `parley.config.yaml`, or the default branch itself if that list is empty. A PR into any other branch gets no parley status at all, never a success. So a second PR with the same head against an unprotected branch cannot turn the first one green. Comments from logins that are not parties are skipped without running the check.
+
+To set this up:
+- **Protect your default branch** and **require the status check `parley/main`** (use your branch's name). Set its expected source to the GitHub Actions app. Require the status, not the job name.
+- **Turn on "require branches to be up to date".**
+- **Give counterparties read access only.** Anyone with write access to the repository can post commit statuses from a workflow of their own, including a fake `parley/main`. So each counterparty works from a **fork**, and write and admin access stay with people every party trusts.
 
 Every form below is **a line of its own, with nothing after it**. "approve 3.2 #h if you drop the fee" is not an approval. Neither is a quoted line ("> approve ...").
 
 | To | Who | Comment line |
 |---|---|---|
-| Clear agent-written changes (cited, or synthetic) | a person of a party other than the PR author's | `approve 2.2 #f794d7a23c93, 4.3 #875394dafe0c` (one or more clause and hash pairs, as printed by the check; a clause may be prefixed with its file, `term-sheets/x.md 3`) |
+| Clear agent-written changes (cited, or synthetic) | a person of a party that is neither the PR author's nor the agent's (`agents:` in the config). On a PR opened by a non-party login (a bot), an agent not mapped to a party cannot be approved at all. | `approve 2.2 #f794d7a23c93, 4.3 #875394dafe0c` (one or more clause and hash pairs, as printed by the check; a clause may be prefixed with its file, `term-sheets/x.md 3`) |
 | Accept a clause verify found contradicted | the same | `approve-contradicted 7.2 #<hash>` |
-| Instruct an agent | the person the Source names, from their login | `instruct 4.1: <what to change>` |
+| Instruct an agent (a source) | the person the Source names, from their login | `instruct 4.1: <what to change>` |
+| Confirm the agent's exact text | the same person, after the latest push | `instruct 4.1 #<current hash>: <what to change>` |
+| Set a terminal status (`front_matter.terminal_status`, default `signed`) | a person of every party | `approve status design-mou.md signed #<first 12 characters of the head commit>` |
 | Change the rules, checks or config (`.parley/`, `.github/`, `parley.config.yaml`, `NEGOTIATION.md`, `AGENTS.md`, agent instruction files) | a person of every party | `approve rules <first 12 characters of the head commit>` |
 | Add a meeting record in which anyone outside the PR author's party speaks | a person of each such party | `approve record 2026-10-14-kickoff.md #<first 12 characters of the file's SHA-256>` |
 | Mark an issue agreed (once NEGOTIATION.md is adopted) | every other party | `agree MOU-02 #<row hash>` |
@@ -100,7 +111,7 @@ A comment counts only if:
 - it is on this pull request;
 - it was written by a login listed in `parley.config.yaml`;
 - it was never edited;
-- for every form except `instruct`, it was posted after the latest push.
+- for every form except a bare `instruct` (a source), it was posted after the latest push.
 
 Every approval names exactly what it approves: a clause hash, a record's content hash, the head commit, or an issue row's hash. Change that content and the approval no longer matches it. A line in the PR body never approves anything.
 
@@ -140,7 +151,7 @@ The full rules live in [`templates/AGENTS.md`](templates/AGENTS.md) and [`templa
 
 ## Why CI cannot be talked out of it
 
-- **The base branch runs the check.** The workflow runs on `pull_request_target` and `issue_comment`, so GitHub uses the base branch's copy of the workflow. The workflow runs the checker (`.parley/parley.mjs`) from the tip of the PR's base branch. The PR head is fetched as git data and is never checked out or run. A PR that edits the checker is still judged by the old one. The token is read-only and is not left on disk. Actions are pinned by commit SHA.
+- **The base branch runs the check.** The workflow runs on `pull_request_target` and `issue_comment`, so GitHub uses the base branch's copy of the workflow. The workflow runs the checker (`.parley/parley.mjs`) from the tip of the PR's base branch. The PR head is fetched as git data and is never checked out or run. A PR that edits the checker is still judged by the old one. The token can read the repository and write commit statuses, nothing else, and it is not left on disk. Actions are pinned by commit SHA.
 - **Today's rules apply.** The parties, their logins, the material terms, NEGOTIATION.md adoption and merged records are read from the base branch tip, and a PR must be up to date with that tip. A PR cut from an old commit cannot pick older, weaker rules.
 - **Changing the rules takes everyone.** A PR that changes the checker, the workflow, the config, NEGOTIATION.md or agent instructions needs every party's `approve rules` comment, and cannot also change an agreement. If the config is on the base branch but the checker is gone, the workflow fails rather than passing.
 - **Records are evidence only once merged, and nobody posts the other side's words alone.** A record must already be on the base branch to count, and must not have been added by a commit an agent declared. If anyone outside the PR author's party speaks in it, each such party approves its exact content (`approve record <file> #<sha12>`). Merged records are never edited.
@@ -149,8 +160,10 @@ The full rules live in [`templates/AGENTS.md`](templates/AGENTS.md) and [`templa
 - **Provenance must be consistent.** If the change table and a commit trailer disagree about who wrote a clause, the check fails.
 
 What parley cannot protect against, so you should know:
-- **Repo admins.** Anyone with admin rights can change branch protection, disable the workflow, or merge without it. GitHub records comment edits, and parley rejects edited comments, but an admin can delete and repost a comment. Keep admin rights with people both parties trust, and require the `parley` check in branch protection.
+- **Anyone with write access can post statuses.** A workflow on any branch with `statuses: write` can post `parley/main: success` to any commit. Branch protection's "expected source: GitHub Actions" does not stop this, because that workflow also runs as GitHub Actions. The defense is access: counterparties work from forks with read access only.
+- **Repo admins.** Anyone with admin rights can change branch protection, disable the workflow, or merge without it. GitHub records comment edits, and parley rejects edited comments, but an admin can delete and repost a comment. Keep admin rights with people every party trusts, and require `parley/<branch>` in branch protection.
 - **Self-declared provenance.** An agent that commits under a person's name and leaves out its `Parley-Author` trailer looks like that person. The commit's GitHub identity and your review are the defense.
+- **Audit and the UI trust the git author name.** `parley audit` and `parley ui` read approvals from `Parley-Approved:` trailers on commits whose git author name is a person in the config. Anyone who can commit can set that name, so those views are only as trustworthy as your commit history. CI does not use commit authors for approvals: it checks the GitHub login on each PR comment.
 - **Committer dates.** "After the latest push" means after the head commit's committer date, or after a later force-push. The pusher sets the committer date. Backdating it can make an approval written before the push count as written after it. But every approval names a hash of the exact content it approves. So a backdated push can only get an approval counted for the same content that approval already named, never for anything else. Setting the date in the future only makes approvals harder to get.
 
 We vendor the checker instead of running `npx parley@latest` in CI. It works offline and pins exactly what judged each PR. To upgrade it, run `parley init --force` in a pull request of its own, which every party approves.

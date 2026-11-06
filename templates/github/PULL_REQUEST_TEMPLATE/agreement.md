@@ -28,7 +28,12 @@ Every changed clause gets a row. `parley check` fails any clause touched in the 
 
 If the PR changes more than one agreement, start each Clause with the file's path under `agreements/` (for example `services-agreement.md 2.2` or `term-sheets/services.md 3`). A change inside front matter (other than `version`, `date` or `status`) needs a `front matter` row.
 
-Agent-written changes are cleared by `parley verify` (in CI), or by someone from the other party commenting on this PR, after the latest push, on a line of its own: `approve <clause> #<hash>, <clause> #<hash>`, using the hashes `parley check` prints. A clause verify found contradicted needs `approve-contradicted <clause> #<hash>`. The required check is the `parley` status.
+Agent-written changes are cleared in one of three ways:
+- `parley verify` finds them `supported` (in CI).
+- Someone from a party that is neither the author's nor the agent's comments on this PR, after the latest push, on a line of its own: `approve <clause> #<hash>, <clause> #<hash>`, using the hashes `parley check` prints. A clause verify found contradicted needs `approve-contradicted <clause> #<hash>`.
+- The instructing person comments `instruct <clause> #<hash>: ...` after the latest push.
+
+The required check is the `parley/<branch>` status.
 
 ### New terms
 

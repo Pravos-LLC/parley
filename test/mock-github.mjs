@@ -3,11 +3,25 @@
 // routes.json maps "path?query" (or just "path") to the JSON to return. It is re-read on every
 // request, so a test can rewrite it between cases. Unknown paths return 404.
 import { createServer } from 'node:http';
-import { readFileSync } from 'node:fs';
+import { appendFileSync, readFileSync } from 'node:fs';
 
 const [port, file] = process.argv.slice(2);
 // Any method: GET for the GitHub API, POST for the OpenRouter chat completion stand-in.
 createServer((req, res) => {
+  // POST bodies (the verify prompt) are appended to <routes.json>.requests for tests to inspect.
+  if (req.method === 'POST') {
+    let body = '';
+    req.on('data', (d) => (body += d));
+    req.on('end', () => {
+      appendFileSync(`${file}.requests`, body + '\n');
+      answer(req, res);
+    });
+    return;
+  }
+  answer(req, res);
+}).listen(Number(port), '127.0.0.1');
+
+function answer(req, res) {
   let routes = {};
   try {
     routes = JSON.parse(readFileSync(file, 'utf8'));
@@ -22,4 +36,4 @@ createServer((req, res) => {
   }
   res.writeHead(200, { 'content-type': 'application/json' });
   res.end(JSON.stringify(hit));
-}).listen(Number(port), '127.0.0.1');
+}

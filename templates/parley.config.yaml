@@ -38,6 +38,14 @@ provenance:
 front_matter:
   # Values the "status" key may take without a row in the change table.
   status: [draft, proposed, agreed, signed, adopted]
+  # Setting one of these needs every party to comment on the PR:
+  #   approve status <file name> <status> #<first 12 characters of the head commit>
+  terminal_status: [signed]
+
+# Base branches whose pull requests get a "parley/<branch>" commit status. Empty means the
+# repository's default branch. CI reads this list from the default branch only. Require the
+# "parley/<branch>" status (source: GitHub Actions) in that branch's protection rules.
+protected_branches: []
 
 verify:
   # Open-weight model on OpenRouter used by `parley verify`. See docs/models.md in

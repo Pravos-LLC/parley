@@ -13,7 +13,7 @@ Read `AGENTS.md` and `NEGOTIATION.md` first, then the agreement's term sheet and
 ## Before you change a clause
 
 1. Find what a person said that asks for the change: an utterance in `records/` (`records/<file>.md#u012`) already merged on the base branch, or that person's comment on this PR with a line `instruct <clause>: <what they want>`.
-   A cited utterance does not clear your change by itself: `parley verify` must agree in CI, or the other party approves it. Only an `instruct` comment clears it outright.
+   A cited utterance or a plain `instruct` comment does not clear your change by itself. `parley verify` must find it `supported` in CI, or the other party approves its hash. Alternatively, the instructing person confirms your exact text with `instruct <clause> #<hash>: ...` after your last push.
 2. If you cannot find one, do not draft the change. Ask your principal, or raise it as a question in the PR. A change with no source is a synthetic term and CI fails it.
 3. Never cite a record you or another agent wrote. Records come from `parley ingest` of a real meeting, merged before your PR.
 

@@ -4,7 +4,7 @@
 // chat completion that parley verify sends.
 import { writeFileSync } from 'node:fs';
 
-const [out, spec, verdict] = process.argv.slice(2);
+const [out, spec, verdict, quote, ids] = process.argv.slice(2);
 const list = JSON.parse(spec || '[]');
 const REPO = 'acme/deal';
 const comments = list.map((c) => ({
@@ -24,7 +24,7 @@ const routes = {
 for (const c of comments) routes[`/repos/${REPO}/issues/comments/${c.id}`] = c;
 if (verdict) {
   routes['/openrouter/chat/completions'] = {
-    choices: [{ message: { content: JSON.stringify({ verdict, utterance_ids: ['u001'], quote: 'mock', confidence: 0.9 }) } }],
+    choices: [{ message: { content: JSON.stringify({ verdict, utterance_ids: (ids || 'u001').split(','), quote: quote ?? 'We keep the difference on the studio rate, net of our costs.', confidence: 0.9 }) } }],
     usage: { cost: 0 },
   };
 }

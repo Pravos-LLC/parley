@@ -24,6 +24,7 @@ rm -rf "$TARGET"
 mkdir -p "$TARGET"
 cd "$TARGET"
 git init -q -b main
+TMPL="$(mktemp)"
 git config commit.gpgsign false
 
 commit() { # $1 who (ana|marcus|fleet|north), $2 date, $3 message file or text
@@ -58,16 +59,20 @@ for v in 1 2 3 4 5 6 7; do
   fi
   cp "$HERE/versions/v$v.md" agreements/design-services.md
   commit "${who[$v]}" "${dates[$v]}" "$HERE/versions/v$v.msg"
-  # The other side reads the round and approves every change that cites what was said. The
-  # four planted terms have no valid source, so they are not on the list and stay synthetic.
-  cleared="$( (node "$CLI" audit --repo . --base HEAD~1 --head HEAD --json || true) | node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);process.stdout.write(r.findings.filter(f=>f.status==="needs-person").map(f=>f.clause+" #"+f.hash).join(", "))})')"
-  if [ -n "$cleared" ]; then
-    case "${who[$v]}" in fleet) reviewer=ana ;; north) reviewer=marcus ;; *) reviewer="" ;; esac
-    if [ -n "$reviewer" ]; then
-      commit "$reviewer" "${dates[$v]}" "review: round $((v - 1)) checked against the call
+  # The other side reads the round and approves, one change at a time, each change that cites
+  # what was said. The four planted terms have no valid source, so they are never offered for
+  # approval and stay synthetic. (Demo shortcut: in a real repository these approvals are
+  # comments on the round's pull request; see README.md in this folder.)
+  case "${who[$v]}" in fleet) reviewer=ana ;; north) reviewer=marcus ;; *) reviewer="" ;; esac
+  if [ -n "$reviewer" ]; then
+    (node "$CLI" audit --repo . --base HEAD~1 --head HEAD --json || true) |
+      node -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{const r=JSON.parse(s);for(const f of r.findings.filter(f=>f.status==="needs-person"))console.log(f.clause+"\t"+f.hash+"\t"+(f.source||"").replace(/records\/[^#]+#/g,""))})' > "$TMPL"
+    while IFS="$(printf '\t')" read -r clause hash src; do
+      [ -n "$clause" ] || continue
+      commit "$reviewer" "${dates[$v]}" "review: ${clause} matches the call (${src})
 
-Parley-Approved: $cleared"
-    fi
+Parley-Approved: ${clause} #${hash}"
+    done < "$TMPL"
   fi
 done
 if [ "$WITH_VERIFY" = 1 ]; then

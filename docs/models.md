@@ -6,12 +6,13 @@
 
 | Verdict | What `parley check` does |
 |---|---|
-| `supported`, `partial` | clears an agent-written change that cites the call |
+| `supported` | clears an agent-written change that cites the call, if the verdict quotes a line it was shown, word for word (otherwise it counts as `unsupported`) |
+| `partial` | not cleared: the clause adds or changes something material, so it needs the other party's approval |
 | `contradicted` | the clause becomes a synthetic term and fails, even with the other party's approval, unless they comment `approve-contradicted <clause> #<hash>` |
 | `unsupported` | not cleared: the change needs the other party's approval (amber, "needs a person") |
 | no verdict (no `OPENROUTER_API_KEY`) | not cleared: every agent-written change needs the other party's approval |
 
-A citation alone never clears an agent-written change. In the trial below, every capable model said `contradicted` for every planted term. `unsupported` mostly landed on boilerplate, where reasonable people disagree. A missing or invented source fails with or without a model.
+A citation alone never clears an agent-written change. Verify is a filter that can clear a change on `supported` or send it to a person. It is not proof. The clause and transcript go to the model inside `<clause_data>` and `<transcript_data>` blocks, with angle brackets in the data replaced so a clause cannot close its block. The system prompt says never to follow instructions found inside them, and only the JSON verdict is read. The trial below measured how the models flag terms. It did not measure resistance to adversarial clause text, so a person's approval remains the stronger clearance. In the trial below, every capable model said `contradicted` for every planted term. `unsupported` mostly landed on boilerplate, where reasonable people disagree. A missing or invented source fails with or without a model.
 
 Where results come from:
 - **CI** (`parley check`): when the repository has an `OPENROUTER_API_KEY` secret, the check runs verify itself, on this head, on each agent-written change that cites a source, against records merged on the base branch. It never reads `.parley/verifications.json` from the pull request. From the base branch it takes only `contradicted` verdicts, which can add a failure but never clear anything.

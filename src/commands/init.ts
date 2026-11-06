@@ -93,9 +93,14 @@ export function initCommand(args: string[]): number {
 Next:
   1. Edit parley.config.yaml: the parties, their GitHub logins and the people who speak for them.
   2. Merge this setup in its own PR. From then on CI runs .parley/parley.mjs from the base branch.
-     In branch protection, require the status check named "parley" (the workflow posts it on
-     every PR head, and again when someone comments an approval).
-  3. Ingest your first call:   parley ingest call.vtt --meeting kickoff --date 2026-01-15
-  4. Draft the term sheet from it, citing utterances, and open the agreement PR with the template.`);
+  3. Protect your default branch (say main). Require the status check "parley/main", with
+     GitHub Actions as its expected source, and require branches to be up to date. The workflow
+     posts that status on every PR head, and again when someone comments, edits or deletes a
+     comment. PRs into branches not in protected_branches get no parley status at all.
+  4. Anyone with write access can post commit statuses from their own workflow. So each
+     counterparty works from a fork with read access only; keep write and admin access with
+     people every party trusts.
+  5. Ingest your first call:   parley ingest call.vtt --meeting kickoff --date 2026-01-15
+  6. Draft the term sheet from it, citing utterances, and open the agreement PR with the template.`);
   return 0;
 }

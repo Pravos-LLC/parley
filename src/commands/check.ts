@@ -72,7 +72,7 @@ import {
   type VerificationEntry,
 } from '../lib/provenance.js';
 import { commentProblem, GitHub, type GhComment } from '../lib/github.js';
-import { approves, approvesRecord, approvesRules, instructs, issueVerdict, parseApprovals, type ApprovalItem } from '../lib/approvals.js';
+import { approves, approvesRecord, approvesRules, approvesStatus, instructLine, instructs, issueVerdict, parseApprovals, type ApprovalItem } from '../lib/approvals.js';
 import { sha256, shortHash } from '../lib/markdown.js';
 import { parseRecord } from '../lib/records.js';
 import { retrieve, verifyClause } from './verify.js';
@@ -376,19 +376,22 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
     }
   }
   const approverFor = (file: string, id: string, hash: string, contradicted: boolean, changeAuthor: string): string | null => {
-    const agentParty = partyOfAgent(config.parties, changeAuthor);
+    const agentParty = authorKind(config, changeAuthor) === 'agent' ? partyOfAgent(config.parties, changeAuthor) : null;
+    // With no PR author party and an unmapped agent, nobody can be "the other party".
+    if (!audit && !authorParty && authorKind(config, changeAuthor) === 'agent' && !agentParty) return null;
     for (const src of approvalSources) {
-      if (audit && agentParty && src.party?.id === agentParty.id) continue; // an agent's own side cannot clear it in history
+      if (agentParty && src.party?.id === agentParty.id) continue; // an agent's own side never clears its work
       if (approves(src.items, file, id, hash, contradicted)) return src.by;
     }
     return null;
   };
   const approverNames = (changeAuthor: string) => {
-    if (audit) {
-      const ap = partyOfAgent(config.parties, changeAuthor);
-      return config.parties.filter((p) => p.id !== ap?.id).map((p) => p.name).join(' or ') || 'the other party';
+    const ap = partyOfAgent(config.parties, changeAuthor);
+    if (!audit && !authorParty && authorKind(config, changeAuthor) === 'agent' && !ap) {
+      return `nobody yet: map ${changeAuthor} to its party (agents: in parley.config.yaml), because this PR was not opened by a party login, so`;
     }
-    return otherParties.map((p) => p.name).join(' or ') || 'the other party';
+    const names = config.parties.filter((p) => p.id !== ap?.id && (audit || p.id !== authorParty?.id)).map((p) => p.name);
+    return names.join(' or ') || 'the other party';
   };
   const needApproval: { file: string; id: string; hash: string; contradicted: boolean }[] = [];
 
@@ -398,6 +401,17 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
       fail(`${file}: the front matter opens with "---" on the first line but is never closed. Close it with a "---" line, or remove the opening line.`);
     }
     const touched = touchedClauses(git, mergeBase, headSha, file, config.frontMatterStatus);
+    // Setting a terminal status (signed, by default) needs every party, whatever else changed.
+    const statusBefore = frontMatter(git.show(mergeBase, file)).status ?? '';
+    const statusNow = frontMatter(headText).status ?? '';
+    if (!audit && statusNow !== statusBefore && config.terminalStatus.includes(statusNow)) {
+      const fname = file.split('/').pop()!;
+      if (canVerify) {
+        const missing = config.parties.filter((p) => commentsFrom(p.logins, (b) => approvesStatus(b, fname, statusNow, shortHead), true).length === 0);
+        if (missing.length) fail(`${file} is being marked "${statusNow}". Every party approves that: ${missing.map((p) => p.name).join(' and ')} still need to comment on this PR, after the latest push: "approve status ${fname} ${statusNow} #${shortHead}".`);
+      } else if (ci) fail(`${file} is being marked "${statusNow}", and that approval cannot be verified in this run.`);
+      else say(`(local run: marking ${file} "${statusNow}" needs "approve status ${fname} ${statusNow} #${shortHead}" from every party; CI checks.)`);
+    }
     say(`\n${file}: clauses touched: ${[...touched].sort(natural).join(', ') || 'none'}`);
 
     // Trailer provenance per clause, from the commits that touched it.
@@ -469,7 +483,16 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
         const logins = loginsForPerson(config.parties, who);
         const problem = await linkedComment(url, logins, (b) => instructs(b, id));
         if (problem === null) instructionProblems.set(prov.source, `unverifiable: ${who}'s instruction comment can only be checked in CI`);
-        else instructionProblems.set(prov.source, problem ? `the instruction comment does not count: ${problem}` : null);
+        else if (problem) instructionProblems.set(prov.source, `the instruction comment does not count: ${problem}`);
+        else {
+          // It is a real instruction from that person. It clears the change only if it names this
+          // exact text's hash and was posted after the latest push; otherwise it is a source.
+          const c = await gh.comment(url.match(/#issuecomment-(\d+)/)![1]);
+          const named = c ? instructLine(c.body, id) : null;
+          const fresh = c && pushedAt ? Date.parse(c.created_at) > Date.parse(pushedAt) : false;
+          if (named === hash.slice(0, 12) && fresh) instructionProblems.set(prov.source, null);
+          else instructionProblems.set(prov.source, `source-only: ${who}'s instruction is a source, not a confirmation of this text (to confirm it, ${who} comments after the latest push "instruct ${id} #${hash}: ..."); it needs parley verify or the other party's approval`);
+        }
       }
 
       const rank = { 'unknown-author': 5, synthetic: 4, 'needs-person': 3, 'approved-synthetic': 2, 'agent-sourced': 1, human: 0 } as const;
@@ -499,6 +522,7 @@ export async function runCheck(opts: CheckOptions): Promise<CheckResult> {
           const lines = [...cited.c.cited, ...retrieve(clauseText, pool)].filter((u, i, arr) => arr.findIndex((x) => x.file === u.file && x.id === u.id) === i);
           const r = await verifyClause(config.verify.model, clauseText, lines, verifyKey!);
           verification = { file, clause: id, hash, model: config.verify.model, verdict: r.verdict, utterance_ids: r.utterance_ids, quote: r.quote, run_at: new Date().toISOString() };
+          if (r.note) say(`${file} ${id}: the model said "supported", but ${r.note}, so it counts as unsupported.`);
         } catch (e) {
           say(`${file} ${id}: parley verify could not run (${(e as Error).message}); the change needs the other party's approval.`);
         }

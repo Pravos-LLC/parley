@@ -161,9 +161,10 @@ export function classify(ctx: ClassifyContext, prov: Provenance | null): Classif
       reasons.push(`instruction source does not name a person in parley.config.yaml ("${who}")`);
     } else if (url) {
       const problem = ctx.instructionCommentProblem ? ctx.instructionCommentProblem(prov.source) : 'unverifiable: the instruction comment can only be checked in CI';
-      if (problem?.startsWith('unverifiable')) {
-        // Outside CI the comment cannot be fetched: a person still has to look.
-        reasons.push(problem.replace(/^unverifiable:\s*/, ''));
+      if (problem && /^(unverifiable|source-only):/.test(problem)) {
+        // A real instruction that does not confirm this exact text (or cannot be fetched here)
+        // is a source like an utterance: verify or the other party still has to clear it.
+        reasons.push(problem.replace(/^(unverifiable|source-only):\s*/, ''));
         status = 'needs-person';
       } else if (problem) reasons.push(problem);
       else {
@@ -212,12 +213,14 @@ export function settle(c: Classification, cl: Clearance): Classification {
       if (cl.approvedContradictedBy) return { ...c, status: 'approved-synthetic', reasons: [...reasons, `approved despite the contradiction by ${cl.approvedContradictedBy}`] };
       return { ...c, status: 'synthetic', reasons };
     }
-    if (v && (v.verdict === 'supported' || v.verdict === 'partial')) return { ...c, status: 'agent-sourced', clearedBy: 'verify', reasons: [...reasons, `parley verify (${v.model}): ${v.verdict}`] };
+    // Only "supported" clears. "partial" means the clause adds or changes something material.
+    if (v && v.verdict === 'supported') return { ...c, status: 'agent-sourced', clearedBy: 'verify', reasons: [...reasons, `parley verify (${v.model}): supported`] };
     if (cl.approvedBy || cl.approvedContradictedBy) {
-      if (v && v.verdict === 'unsupported') reasons.push(`parley verify (${v.model}) found no support for it in the transcript`);
+      if (v && (v.verdict === 'unsupported' || v.verdict === 'partial')) reasons.push(`parley verify (${v.model}) found ${v.verdict === 'partial' ? 'only partial' : 'no'} support for it in the transcript`);
       return { ...c, status: 'agent-sourced', clearedBy: 'approval', reasons: [...reasons, `approved by ${cl.approvedBy ?? cl.approvedContradictedBy}`] };
     }
     if (v && v.verdict === 'unsupported') reasons.push(`parley verify (${v.model}) found no support for it in the transcript`);
+    else if (v && v.verdict === 'partial') reasons.push(`parley verify (${v.model}) found it only partly supported: it adds or changes something, so a person has to look`);
     else if (!v) reasons.push('cites what was said, but nothing has checked that it says this: needs parley verify or the other party\'s approval');
     return { ...c, reasons };
   }

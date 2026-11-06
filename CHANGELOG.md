@@ -31,6 +31,16 @@ Second review round:
 - The workflow posts a `parley` commit status on the PR head from both events, so approvals turn the PR green.
 - The test suites block network calls.
 
+Third review round:
+- The status is named `parley/<base>` and posted only for protected bases (`protected_branches`, default: the default branch), decided by `parley gate` from the default branch's checker and config. Bases without setup get no status, never success.
+- Comment edits and deletions re-run the check. Comments from non-party logins are skipped.
+- Only a `supported` verdict clears, and only if it quotes a line it was shown. `partial` needs a person. Clause and transcript go to the model in delimited data blocks, with an instruction to ignore anything inside them.
+- A bare `instruct` is a source. `instruct <clause> #<hash>:` posted after the push confirms exact text.
+- In CI, the agent's own party never approves its work. On a bot-opened PR, an unmapped agent cannot be approved.
+- Setting a terminal status (`signed`) needs every party.
+- The README states that writers can post statuses (use forks), and that audit and the UI trust git author names.
+- Demo approvals are recorded one change per commit.
+
 ### Added
 
 - `parley check`: pull request check for agreement repos. Every changed clause is disclosed in the change table, carries an Author and a Source, and agent-written terms with no source a person gave fail as synthetic terms. Ported and generalized from a two-party agreement harness: N parties from `parley.config.yaml`, the NEGOTIATION.md rules (interest, why, asked-for-by, issues list, rounds, own position columns, linked approvals), and the rules-versus-content split.

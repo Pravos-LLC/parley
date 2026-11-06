@@ -17,7 +17,7 @@ export function parseApprovals(text: string): ApprovalItem[] {
   const out: ApprovalItem[] = [];
   for (const raw of text.replace(/\r\n/g, '\n').split('\n')) {
     const m = raw.trim().match(/^(approve|approve-contradicted)\s+(.+)$/i);
-    if (!m || /^approve\s+(record|rules)\b/i.test(raw.trim())) continue;
+    if (!m || /^approve\s+(record|rules|status)\b/i.test(raw.trim())) continue;
     const items = m[2].split(',').map((x) => x.trim());
     const parsed = items.map((x) => x.match(ITEM));
     if (!parsed.length || parsed.some((p) => !p)) continue; // one malformed item voids the line
@@ -49,10 +49,25 @@ export function issueVerdict(text: string, verb: 'agree' | 'reopen', id: string,
   return new RegExp(`^${verb}\\s+${id}\\s+#${hash}$`, 'im').test(lines(text));
 }
 
-/** "instruct 3.2: make the reviews Friday afternoons". */
-export function instructs(text: string, clause: string): boolean {
+/**
+ * "instruct 3.2: make the reviews Friday afternoons" (a source) or "instruct 3.2 #<hash>: ..."
+ * (the person confirming this exact text). Returns the hash it names, '' for none, or null when
+ * the comment has no instruct line for this clause.
+ */
+export function instructLine(text: string, clause: string): string | null {
   const esc = clause.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`^instruct\\s+${esc}\\s*:\\s*\\S`, 'im').test(lines(text));
+  const m = lines(text).match(new RegExp(`^instruct\\s+${esc}(?:\\s+#([0-9a-f]{12}))?\\s*:\\s*\\S`, 'im'));
+  return m ? (m[1] ?? '').toLowerCase() : null;
+}
+
+export function instructs(text: string, clause: string): boolean {
+  return instructLine(text, clause) !== null;
+}
+
+/** "approve status design-mou.md signed #<first 12 of the head commit>". */
+export function approvesStatus(text: string, file: string, status: string, sha12: string): boolean {
+  const esc = (x: string) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^approve\\s+status\\s+${esc(file)}\\s+${esc(status)}\\s+#${sha12}$`, 'im').test(lines(text));
 }
 
 /** Normalize line endings and trim each line, so the anchors above mean "the whole line". */

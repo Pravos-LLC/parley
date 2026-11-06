@@ -23,6 +23,10 @@ export interface ParleyConfig {
   provenance: { required: boolean; agentSources: string };
   /** Allowed values for the front-matter "status" key. */
   frontMatterStatus: string[];
+  /** Status values that need every party's approval to set (front_matter.terminal_status). */
+  terminalStatus: string[];
+  /** Base branches whose PRs get a parley/<branch> commit status (empty: the default branch). */
+  protectedBranches: string[];
   verify: { model: string; minConfidence: number };
 }
 
@@ -81,6 +85,8 @@ export function parseConfig(text: string): ParleyConfig {
     },
     provenance: { required: raw.provenance?.required !== false, agentSources: String(raw.provenance?.agent_sources ?? 'verify-or-approve') },
     frontMatterStatus: raw.front_matter?.status ? asList(raw.front_matter.status) : ['draft', 'proposed', 'agreed', 'signed', 'adopted'],
+    terminalStatus: raw.front_matter?.terminal_status ? asList(raw.front_matter.terminal_status) : ['signed'],
+    protectedBranches: asList(raw.protected_branches),
     verify: {
       model: String(raw.verify?.model ?? DEFAULT_MODEL),
       minConfidence: Number(raw.verify?.min_confidence ?? 0.5),

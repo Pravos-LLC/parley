@@ -33,7 +33,12 @@ Agents working on agreements load `.agents/skills/agreement-negotiation/`.
 Each changed clause carries an **Author** and a **Source**, in the PR change table or as commit trailers (`Parley-Author: agent:drafter`, `Parley-Source: records/2026-10-14-kickoff.md#u012`, or per clause `Parley-Change: 4.2 | agent:drafter | records/…#u012`).
 Agents report what they wrote; parley does not guess.
 An agent-written change whose source is missing, invented, written by an agent, or contradicted by the transcript (`parley verify`) is a **synthetic term**.
-An agent-written change that cites what was said is amber ("needs a person") until `parley verify` finds it supported or partial in CI, or someone from a party other than the PR author's comments on the PR, after the latest push, on a line of its own: `approve <clause> #<hash>, ...`. The same comment clears a synthetic term. A contradicted clause needs `approve-contradicted <clause> #<hash>`. Comments must never be edited. A changed clause has a new hash, so the approval no longer applies. The required check is the `parley` commit status.
+An agent-written change that cites what was said is amber ("needs a person"). It is cleared in one of three ways:
+- `parley verify` finds it `supported` in CI. `partial` is not enough.
+- Someone from a party that is neither the PR author's nor the agent's comments on the PR, after the latest push, on a line of its own: `approve <clause> #<hash>, ...`. The same comment clears a synthetic term. A contradicted clause needs `approve-contradicted <clause> #<hash>`.
+- The person who instructed it confirms the exact text, after the latest push: `instruct <clause> #<hash>: ...`.
+
+Comments must never be edited. A changed clause has a new hash, so the approval no longer applies. Marking an agreement `signed` needs every party: `approve status <file> signed #<head sha12>`. The required check is the `parley/<branch>` commit status.
 If the change table and a commit trailer disagree about who wrote a clause, the check fails.
 
 ## Rules and checks change on their own

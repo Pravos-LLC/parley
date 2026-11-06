@@ -61,7 +61,8 @@ test('each round is judged on its own: round 4 is clean, round 2 is not', () => 
   const repo = buildFixture();
   const sha = (grep) => execFileSync('git', ['-C', repo, 'log', '--format=%H', '--grep', grep], { encoding: 'utf8' }).trim();
   const r4 = sha('round 4,');
-  const r4review = sha('review: round 3 ');
+  // The other side's per-change reviews of round 4 end just before the agent's follow-up notes.
+  const r4review = execFileSync('git', ['-C', repo, 'rev-parse', `${sha('records: follow-up notes')}~1`], { encoding: 'utf8' }).trim();
   const r2 = sha('round 2,');
   // Round 4 with the other side's review commit is clean; the round alone still needs a person.
   assert.equal(parley(['audit', '--repo', repo, '--base', `${r4}~1`, '--head', r4review]).status, 0);
@@ -353,6 +354,23 @@ test('R-H1: the ledger shows amber for cited-but-unchecked agent changes, and th
   const out = JSON.parse(parley(['audit', '--repo', r, '--head', first, '--base', `${first}~1`, '--json']).stdout);
   assert.ok(out.findings.some((f) => f.status === 'needs-person'));
   rmSync(dir, { recursive: true, force: true });
+});
+
+
+test('R3-L4: the demo records approvals one change per commit, by the other side', () => {
+  const repo = buildFixture();
+  const log = execFileSync('git', ['-C', repo, 'log', '--format=%an%x00%B%x01', '--grep', '^review:'], { encoding: 'utf8' }).split('\x01').filter((x) => x.trim());
+  assert.ok(log.length >= 40, `${log.length} review commits`);
+  for (const entry of log) {
+    const [author, body] = entry.trim().split('\x00');
+    const trailers = body.split('\n').filter((l) => /^Parley-Approved:/.test(l));
+    assert.equal(trailers.length, 1, body);
+    assert.match(trailers[0], /^Parley-Approved: [\w.]+ #[0-9a-f]{12}$/);
+    assert.ok(['Ana Ruiz', 'Marcus Okafor'].includes(author));
+  }
+  // None of the four planted terms was ever approved.
+  const all = log.join('\n');
+  for (const c of ['3.1', '4.3', '6.1', '6.3']) assert.doesNotMatch(all, new RegExp(`Parley-Approved: ${c.replace('.', '\\.')} #`));
 });
 
 test('R-L3: no test made a network call, and the guard really blocks one', () => {
