@@ -102,7 +102,7 @@ jobs:
     concurrency:
       group: parley-${{ github.event.pull_request.number || github.event.issue.number }}
       cancel-in-progress: false
-      queue: max
+      queue: max # supported on github.com; older actionlint versions flag this key by mistake
     env:
       BASE_REF: ${{ needs.gate.outputs.base }}
       HEAD_SHA: ${{ needs.gate.outputs.head }}
